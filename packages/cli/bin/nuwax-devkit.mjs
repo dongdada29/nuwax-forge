@@ -33,8 +33,11 @@ const COMMANDS = {
     run: async opts => { if (opts.subcommand !== 'run') throw new UsageError('gui 需要子命令 run（当前仅 gui run，显式 live）'); await runGui(opts); },
   },
   budget: {
-    subcommands: ['estimate', 'reconcile'],
-    flags: { spec: 'value', history: 'value', out: 'value', json: 'boolean', estimate: 'value', actual: 'value' },
+    subcommands: ['estimate', 'reconcile', 'guard'],
+    flags: {
+      spec: 'value', history: 'value', out: 'value', json: 'boolean', estimate: 'value', actual: 'value',
+      sessions: 'value', budget: 'value', marker: 'value', 'parent-id': 'value',
+    },
     run: opts => runBudget(opts),
   },
   run: {

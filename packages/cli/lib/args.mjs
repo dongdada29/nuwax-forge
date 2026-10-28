@@ -19,6 +19,8 @@ export const USAGE = `用法：
   nuwax-devkit budget estimate --spec <spec JSON> [--history <校准 JSONL>] [--out <输出 JSON>] --json
   nuwax-devkit budget reconcile --estimate <估算 JSON> --actual <GUI manifest|usage|Claude result JSON>
                                [--history <校准 JSONL>] [--out <输出 JSON>] --json
+  nuwax-devkit budget guard --sessions <codex 会话 JSONL 文件或目录> --budget <预算 JSON>
+                            [--marker <起点标记文本>] [--parent-id <宿主线程 id>] --json
 
 说明：
   doctor  检查 Node>=22 / Python>=3.10 与 5 个包绑定，不联网、不改全局；有问题退出非 0。
@@ -41,7 +43,13 @@ export const USAGE = `用法：
           缓存子集/视觉 unknown 建模（unknown 不冒充 0、不放行预算）；reconcile 对照实耗并区分
           cache 口径（Claude excludes-cache vs usage includes-cache），把脱敏校准样本（数字/ids/
           模型/任务类型/来源 hash，无 prompt/截图/凭据）按 estimateId+sourceHash 去重追加进 --history。
-          只读显式给出的文件；--out 不允许覆盖任何输入/源文件（realpath/inode 别名同样拒绝）。`;
+          只读显式给出的文件；--out 不允许覆盖任何输入/源文件（realpath/inode 别名同样拒绝）。
+  budget guard  宿主 Codex 会话 token 守卫（离线、0 模型调用、只读、绝不隐式读 ~/.codex）：
+          解析会话 JSONL 的 token_count 事件（取最后值），宿主自 marker 起差额 +
+          parent_thread_id 匹配的 worker 会话合计，与预算相位阈值（stopBefore/parent/
+          executor/reserve/wall）比对；归一口径复用 actual.mjs（includes-cache：total=
+          input+output）。这是相位门不是供应商硬顶：快照尾部与在途调用未知。退出码：
+          0=within，2=超限（over），3=数据不足/unknown；1=预算 JSON/路径等数据错误。`;
 
 export function parseArgs(argv, commands) {
   if (argv.length === 0 || argv[0] === 'help' || argv[0] === '--help' || argv[0] === '-h') {

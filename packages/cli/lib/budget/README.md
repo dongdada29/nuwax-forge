@@ -2,6 +2,19 @@
 
 预算预测自身离线、0 次模型调用。`nuwax-devkit run` 和 `gui run` 已在真实 spawn 前接入本包现有 `core.mjs` / `actual.mjs`；Python 通过本安装 `bridge.mjs` 复用同一算法，没有第二套公式。默认安装、测试、doctor、verify 不加载模型 SDK、不连接 GUI。
 
+## 宿主 Codex 会话 guard（budget guard 子命令）
+
+```sh
+nuwax-devkit budget guard --sessions ~/.codex/sessions/2026/10/27 \
+  --budget /tmp/budget.json --marker "本轮起点标记文本" --json
+```
+
+`run`/`gui run` 只治理被派发的子进程；宿主 Codex 主对话由本子命令事后/步间核对（由编排方在派发新工作前调用）。离线、0 次模型调用、只读：解析会话 JSONL 的 `token_count` 事件（取 `info.total_token_usage` 最后值），宿主自 marker 起差额（marker 前最后一个快照为基线，无 marker 按整会话基线 0）+ 按 `session_meta source.subagent.thread_spawn.parent_thread_id` 匹配的 worker 会话合计（marker 模式只计 marker 之后 spawn 的）。token 归一口径**复用 `actual.mjs` 的规范 usage JSON 解析**（includes-cache：total=input+output、cached 为输入子集、parts≠total 拒绝），不写第二套公式。
+
+预算 JSON（结构同仓外原型 budget_snapshot.py 内嵌字段）：`totalTokens`/`stopBeforeTotalTokens` 必填，`parentTokens`（宿主相位）/`executorTokens`（worker 相位）/`acceptanceReserveTokens`（observed > total−reserve 即占验收预留）/`wallMinutes`（起点→最后快照墙钟）可选。判定：任一相位阈值确定性超限 → verdict `over` exit **2**；宿主无 token_count / marker 未找到 / worker 快照缺数字 / 墙钟不可测 → verdict `unknown` exit **3**（unknown ≠ 0，不放行）；预算 JSON 或路径数据错误 exit 1。over 与 unknown 并存按 over（可立即止损），unknown 仍列出。目录含多个非 worker 会话时用 `--parent-id <宿主线程 id>` 唯一指定；坏 JSON 行跳过并计数，不中断不伪 0。
+
+**诚实边界（沿用原型，勿删）**：`warning: snapshot tail and in-flight calls unknown; phase gate, not provider hard cap`——只计至最后一个 token_count 快照，其后尾部与在途调用未知；这是相位门（超阈值即停止派发新工作），不是供应商硬顶，无法中止已发出请求的消耗。测试 `test/budget-guard.test.mjs` 全部使用临时目录伪造脱敏 JSONL，绝不读真实 `~/.codex` 会话。
+
 ## crew plan → route → run
 
 ```sh

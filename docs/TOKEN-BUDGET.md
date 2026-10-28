@@ -7,9 +7,11 @@
 ```bash
 nuwax-devkit budget estimate   --spec <spec JSON> [--history <校准 JSONL>] [--out <输出 JSON>] --json
 nuwax-devkit budget reconcile --estimate <估算 JSON> --actual <实耗 JSON> [--history <校准 JSONL>] [--out <输出 JSON>] --json
+nuwax-devkit budget guard     --sessions <codex 会话 JSONL 文件或目录> --budget <预算 JSON>
+                               [--marker <起点标记文本>] [--parent-id <宿主线程 id>] --json
 ```
 
-退出码：0=成功算出（verdict 含 within/exceeds/unknown，均属正常输出）；2=用法错误；1=数据错误（非法值/坏 JSON/total 不一致/路径冲突等）。
+退出码：0=成功算出（verdict 含 within/exceeds/unknown，均属正常输出）；2=用法错误；1=数据错误（非法值/坏 JSON/total 不一致/路径冲突等）。guard 例外：**2=超限（over）、3=数据不足/unknown**（见下）。
 
 ## estimate 输入 spec（schemaVersion 1）
 
@@ -76,6 +78,18 @@ totalTokens = totalInput + totalOutput
 - `--out` 不得覆盖任何输入/源文件（spec/estimate/actual/history）；realpath 符号链接别名与 inode 硬链接同样拒绝；`--out` 与 `--history` 互写拒绝。
 - 写入原子（同目录 tmp + rename）；拒绝后源文件不被破坏。
 - 只读显式传入的路径，不扫仓库、不读环境凭据。
+
+## guard：宿主 Codex 会话守卫（phase gate）
+
+`run`/`gui run` 的预算门只覆盖被派发的子进程；发起任务的**宿主 Codex 主对话**不受那层控制。`budget guard` 把仓外原型（budget_snapshot.py）产品化：离线、0 次模型调用、只读显式给出的会话文件（绝不隐式读 `~/.codex`，测试全部用临时目录伪造脱敏 JSONL）。
+
+- **输入**：`--sessions` 为宿主会话 JSONL 文件或目录（目录递归扫 `*.jsonl`；多宿主歧义时用 `--parent-id` 指定）；`--budget` 为预算 JSON；`--marker` 可选文本起点。
+- **计量**：解析 `event_msg type=token_count` 的 `info.total_token_usage`（取**最后值**）；宿主自差额 = 最后值 − marker 前最后一个快照（无 marker 按整会话、基线 0；marker 前无事件按 0 基线）；worker 会话按首行 `session_meta source.subagent.thread_spawn.parent_thread_id` 匹配宿主 id（marker 模式只计 marker 之后 spawn 的），各取其最后快照合计。
+- **归一口径**：复用 `actual.mjs` 的规范 usage JSON 解析（includes-cache）：total = input + output，cached 为输入子集不重复加，parts≠total / cached>input 拒绝；计数回退（截断/重写）拒绝。**没有第二套公式**。
+- **预算 JSON 字段**（结构同原型内嵌 budget）：`totalTokens`、`stopBeforeTotalTokens` 必填；`parentTokens`（宿主相位）、`executorTokens`（worker 合计相位）、`acceptanceReserveTokens`（observed > total − reserve 即占用验收预留）、`wallMinutes`（marker/会话起点→最后快照的墙钟）可选；`measurement` 口径字符串可选。stopBefore/reserve 不得大于 totalTokens。
+- **判定与退出码**：0=within；**2=over**（任一相位阈值确定性超限，可立即止损）；**3=数据不足/unknown**（宿主无 token_count、marker 未找到、worker 快照缺数字、墙钟不可测等——unknown ≠ 0，不放行）；1=预算 JSON/路径数据错误。over 与 unknown 并存时按 over（确定性超限可行动），unknown 仍全部列出。
+- **诚实边界（与原型一致，必须保留）**：`warning: snapshot tail and in-flight calls unknown; phase gate, not provider hard cap`——只计至最后一个 token_count 快照，其后尾部与在途调用未知；这是**相位门，不是供应商硬上限**，靠"超阈值即停止派发新工作"生效，不能阻止已发出请求的消耗。
+- 坏行容错：坏 JSON 行跳过并计数（`badLines`），不中断也不伪 0；计量以最后一个可用快照为准。
 
 ## 界限
 

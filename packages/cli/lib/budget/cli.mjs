@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { UsageError } from '../args.mjs';
 import { BudgetDataError, parseSpec, computeEstimate, parseHistoryLines } from './core.mjs';
 import { parseActual, reconcileEstimate } from './actual.mjs';
+import { parseGuardBudget, computeGuard, humanGuard } from './guard.mjs';
 
 function readJsonFile(file, label) {
   let text;
@@ -80,7 +81,23 @@ function humanReconcile(r) {
 
 export async function runBudget(opts) {
   const sub = opts.subcommand;
-  if (!sub) throw new UsageError('budget 需要子命令 estimate 或 reconcile');
+  if (!sub) throw new UsageError('budget 需要子命令 estimate、reconcile 或 guard');
+  if (sub === 'guard') {
+    // 宿主 Codex 会话守卫（phase gate，非供应商硬顶）：离线解析会话 JSONL 的 token_count，
+    // 归一口径复用 actual.mjs；超限 exit 2、数据不足/unknown exit 3；只读，无 --out。
+    for (const f of ['spec', 'history', 'out', 'estimate', 'actual']) {
+      if (opts[f]) throw new UsageError(`budget guard 不接受 --${f}（属于 estimate/reconcile）`);
+    }
+    if (!opts.sessions || !opts.budget) {
+      throw new UsageError('budget guard 需要 --sessions <codex 会话 JSONL 文件或目录> 与 --budget <预算 JSON>');
+    }
+    const budget = parseGuardBudget(readJsonFile(opts.budget, 'budget'));
+    const report = computeGuard({ sessionsPath: opts.sessions, budget, marker: opts.marker ?? null, parentId: opts['parent-id'] ?? null });
+    process.stdout.write(opts.json ? JSON.stringify(report, null, 2) + '\n' : humanGuard(report) + '\n');
+    if (report.verdict === 'over') process.exitCode = 2;
+    else if (report.verdict === 'unknown') process.exitCode = 3;
+    return;
+  }
   if (sub === 'estimate') {
     if (!opts.spec) throw new UsageError('budget estimate 需要 --spec <JSON>');
     if (opts.estimate || opts.actual) throw new UsageError('budget estimate 不接受 --estimate/--actual（属于 reconcile）');
