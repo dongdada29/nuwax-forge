@@ -1,0 +1,92 @@
+{
+  "accepted": true,
+  "scope": [
+    "五包本地分发",
+    "source-tooling闭环",
+    "可选GUI离线fixture契约与反例"
+  ],
+  "workspaceTests": {
+    "nodeSuites": [
+      18,
+      18,
+      19
+    ],
+    "pythonSuites": [
+      47,
+      55
+    ],
+    "total": 157
+  },
+  "clientSelectedTests": 22,
+  "installedCliWallSeconds": {
+    "client-fresh": 1.581,
+    "client-reuse": 0.124,
+    "client-tamper": 1.645
+  },
+  "internalModelRequests": 0,
+  "productBuilds": 0,
+  "repeatedProductBuilds": 0,
+  "latestValidClientManifest": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-independent-185421/client state/artifacts/2e34fbdc-bf97-498e-b28b-2b9079757f0d/verification.json",
+  "independentEvidence": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-independent-185421",
+  "dshReview": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/DSH-EXPLORATION-REVIEW.md",
+  "dshIndependentEvidence": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/dsh-independent-review.json",
+  "implementation": [
+    {
+      "stage": "首次实现",
+      "wallSeconds": 955.454,
+      "cliNumTurns": 91,
+      "uniqueAssistantMessageIds": 49,
+      "models": [
+        "glm-5.3[1m]"
+      ],
+      "processPassed": true,
+      "evidence": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-execution.json"
+    },
+    {
+      "stage": "首轮返修",
+      "wallSeconds": 751.224,
+      "cliNumTurns": 62,
+      "uniqueAssistantMessageIds": 42,
+      "models": [
+        "glm-5.3[1m]"
+      ],
+      "processPassed": true,
+      "evidence": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-review-execution.json"
+    },
+    {
+      "stage": "配方路径修复",
+      "wallSeconds": 114.745,
+      "cliNumTurns": 15,
+      "uniqueAssistantMessageIds": 7,
+      "models": [
+        "glm-5.3[1m]"
+      ],
+      "processPassed": true,
+      "evidence": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-final-fix-execution.json"
+    },
+    {
+      "stage": "严格计量组合修复",
+      "wallSeconds": 151.535,
+      "cliNumTurns": 20,
+      "uniqueAssistantMessageIds": 11,
+      "models": [
+        "glm-5.3[1m]"
+      ],
+      "processPassed": true,
+      "evidence": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-combination-fix-execution.json"
+    }
+  ],
+  "codeSnapshot": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-final-code-snapshot.json",
+  "notAccepted": [
+    "live GUI / commercial webview scenarios",
+    "产品安装包或真机",
+    "真实构建缓存前后收益",
+    "Windows/Linux与跨机器运行",
+    "远程CI / 生产安装 / 发布",
+    "服务端排队与推理时间拆分 / 硬模型请求预算"
+  ],
+  "clientDoctor": {
+    "ready": false,
+    "acceptance": "JSON structure only; not desktop readiness"
+  }
+}

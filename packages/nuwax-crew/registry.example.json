@@ -1,0 +1,346 @@
+{
+  "executors": [
+    {
+      "name": "codex",
+      "tier": "S",
+      "provider": "openai",
+      "roles": [
+        "implementation",
+        "review",
+        "triage"
+      ],
+      "verified": true,
+      "costProfile": "Codex PRO $100，高额度",
+      "dailyCap": 40,
+      "invocation": {
+        "command": "codex exec --cd {worktree} {brief}",
+        "proposed": true,
+        "channel": "shell+acp",
+        "acpNote": "平台侧由东的助理MBP128 经 ACP 调用（nuwaxcode=opencode 平台别名）"
+      },
+      "evidence": "历史真实执行",
+      "costClass": "subscription"
+    },
+    {
+      "name": "gemini",
+      "tier": "S",
+      "provider": "google",
+      "roles": [
+        "implementation",
+        "review",
+        "research"
+      ],
+      "verified": false,
+      "costProfile": "Gemini PRO，高额度",
+      "dailyCap": 40,
+      "invocation": {
+        "command": "gemini -p {brief}",
+        "proposed": true
+      },
+      "enabled": false,
+      "evidence": "2026-10-22 用户确认 gemini 不可用，下架停用",
+      "costClass": "subscription"
+    },
+    {
+      "name": "claude-code",
+      "tier": "S",
+      "provider": "anthropic-configured",
+      "roles": [
+        "implementation",
+        "review"
+      ],
+      "verified": true,
+      "costProfile": "自配置模型（DeepSeek 等）",
+      "dailyCap": 40,
+      "invocation": {
+        "command": "claude -p {brief}",
+        "proposed": true,
+        "channel": "shell+acp",
+        "acpNote": "平台侧由东的助理MBP128 经 ACP 调用（nuwaxcode=opencode 平台别名）",
+        "modelNote": "已配置 glm-5.3（智谱 Token Plan），属订阅消耗"
+      },
+      "evidence": "2026-10-22 用户确认：claude(code) 已配置 glm-5.3（智谱 Token Plan）",
+      "costClass": "subscription",
+      "model": "glm-5.3",
+      "subscription": "智谱 Token Plan Max（经 claude-code 配置）"
+    },
+    {
+      "name": "cursor",
+      "tier": "A",
+      "provider": "cursor",
+      "roles": [
+        "implementation",
+        "review"
+      ],
+      "verified": true,
+      "costProfile": "Cursor 订阅",
+      "dailyCap": 30,
+      "invocation": {
+        "command": "cursor-agent -p {brief}",
+        "proposed": false
+      },
+      "evidence": "2026-10-22 真实核验通过：登录 dongdada29@gmail.com，只读读取 tests/test_router.py 并准确总结；命令 cursor-agent -p",
+      "costClass": "subscription"
+    },
+    {
+      "name": "opencode",
+      "tier": "B",
+      "provider": "byo-zhipu",
+      "roles": [
+        "triage",
+        "batch",
+        "docs",
+        "implementation"
+      ],
+      "verified": false,
+      "costProfile": "智谱 Token Plan Max",
+      "dailyCap": 80,
+      "invocation": {
+        "command": "opencode run {brief}",
+        "proposed": true,
+        "channel": "shell+acp",
+        "acpNote": "平台侧由东的助理MBP128 经 ACP 调用（nuwaxcode=opencode 平台别名）"
+      },
+      "aliases": [
+        "nuwaxcode"
+      ],
+      "costClass": "subscription"
+    },
+    {
+      "name": "mimo",
+      "tier": "B",
+      "provider": "byo-mimo",
+      "roles": [
+        "triage",
+        "batch",
+        "docs"
+      ],
+      "verified": false,
+      "costProfile": "小米 MIMO Token Plan",
+      "dailyCap": 80,
+      "invocation": {
+        "command": "opencode run --model mimo {brief}",
+        "proposed": true
+      },
+      "enabled": false,
+      "evidence": "；2026-10-22 用户确认订阅已过期，下架停用",
+      "costClass": "subscription"
+    },
+    {
+      "name": "deepseek",
+      "tier": "B",
+      "provider": "byo-deepseek",
+      "roles": [
+        "triage",
+        "batch",
+        "docs",
+        "review"
+      ],
+      "verified": false,
+      "costProfile": "DeepSeek",
+      "dailyCap": 80,
+      "invocation": {
+        "command": "opencode run --model deepseek {brief}",
+        "proposed": true
+      },
+      "costClass": "api"
+    },
+    {
+      "name": "grok",
+      "tier": "C",
+      "provider": "xai",
+      "roles": [
+        "research",
+        "review"
+      ],
+      "verified": true,
+      "costProfile": "Grok PRO $20",
+      "dailyCap": 30,
+      "invocation": {
+        "command": "grok -p {brief}",
+        "proposed": false
+      },
+      "evidence": "2026-10-22 真实核验通过：用户完成登录后，只读读取 tests/test_router.py 并准确三句话总结；命令 grok -p",
+      "costClass": "subscription"
+    },
+    {
+      "name": "ego-browser",
+      "tier": "fixed",
+      "provider": "ego",
+      "roles": [
+        "web-verification"
+      ],
+      "verified": true,
+      "costProfile": "本机",
+      "dailyCap": 100,
+      "invocation": {
+        "command": "ego-browser nodejs {brief}",
+        "proposed": false
+      },
+      "costClass": "subscription"
+    },
+    {
+      "name": "nuwax-a2a",
+      "tier": "fixed",
+      "provider": "nuwax",
+      "roles": [
+        "platform-query"
+      ],
+      "verified": true,
+      "costProfile": "平台",
+      "dailyCap": 100,
+      "invocation": {
+        "command": "群协作结构化提及女娲Nuwax（协作群 238141931362713600）",
+        "proposed": false
+      },
+      "costClass": "subscription"
+    },
+    {
+      "name": "antigravity",
+      "tier": "S",
+      "provider": "antigravity",
+      "roles": [
+        "implementation",
+        "review",
+        "research"
+      ],
+      "verified": true,
+      "enabled": true,
+      "subscription": "Antigravity（含 Claude Opus/Sonnet 5.5、GPT-OSS 等多模型）",
+      "costProfile": "订阅配额制",
+      "dailyCap": 30,
+      "invocation": {
+        "command": "agy --model gemini-3.8-flash-medium -p {brief}",
+        "proposed": false
+      },
+      "evidence": "2026-10-22 真实核验通过（gemini-3.8-flash-medium）：只读读取 tests/test_router.py 三句话准确总结；claude/gpt-oss 模型当前个人配额受限，路由统一走 gemini-3.8-flash",
+      "costClass": "subscription"
+    },
+    {
+      "name": "glm-5.3-flash",
+      "tier": "B",
+      "provider": "byo-zhipu",
+      "roles": [
+        "triage",
+        "docs",
+        "batch"
+      ],
+      "verified": true,
+      "subscription": "智谱 Token Plan Max",
+      "costProfile": "便宜",
+      "dailyCap": 120,
+      "invocation": {
+        "command": "opencode run -m zhipu/glm-5.3-flash {brief}",
+        "proposed": false,
+        "channel": "shell"
+      },
+      "evidence": "2026-10-22 真实核验通过：一句话准确复述 README",
+      "costClass": "subscription"
+    },
+    {
+      "name": "free-pool",
+      "tier": "B",
+      "provider": "opencode-free",
+      "roles": [
+        "triage",
+        "docs",
+        "batch"
+      ],
+      "verified": true,
+      "subscription": "opencode 免费档",
+      "costProfile": "免费",
+      "dailyCap": 200,
+      "models": [
+        "glm-5.3-flash-free",
+        "deepseek-v4.1-flash-free",
+        "mimo-v2.6-flash-free",
+        "minimax-m3.1-flash-free",
+        "nemotron-3-ultra-free",
+        "beam-free"
+      ],
+      "invocation": {
+        "command": "opencode run -m opencode/glm-5.3-flash-free {brief}",
+        "proposed": false,
+        "channel": "shell",
+        "models": [
+          "glm-5.3-flash-free",
+          "deepseek-v4.1-flash-free",
+          "mimo-v2.6-flash-free",
+          "minimax-m3.1-flash-free",
+          "nemotron-3-ultra-free",
+          "beam-free"
+        ]
+      },
+      "evidence": "2026-10-22 六个免费模型逐个实测通过（longcat-2.5-preview-free 上游不可用，未入池）",
+      "costClass": "subscription"
+    },
+    {
+      "name": "dsh",
+      "tier": "A",
+      "provider": "deepseek",
+      "roles": [
+        "implementation",
+        "review"
+      ],
+      "verified": false,
+      "subscription": "DeepSeek Harness",
+      "costProfile": "DeepSeek",
+      "dailyCap": 30,
+      "invocation": {
+        "command": "dsh --profile headless {brief}",
+        "proposed": false,
+        "channel": "shell"
+      },
+      "evidence": "2026-10-22 用户确认不考虑 dsh，下架停用",
+      "costClass": "api",
+      "enabled": false
+    },
+    {
+      "name": "openclaw",
+      "tier": "A",
+      "provider": "openclaw",
+      "roles": [
+        "implementation",
+        "research"
+      ],
+      "verified": false,
+      "enabled": true,
+      "subscription": "OpenClaw 网关",
+      "costClass": "subscription",
+      "dailyCap": 30,
+      "invocation": {
+        "command": "openclaw agent --message {brief}",
+        "proposed": false,
+        "channel": "shell",
+        "modelNote": "默认模型 ds4/deepseek-flash（alias Flash）"
+      },
+      "evidence": "2026-10-22 两次实测均 429 quota exhausted（默认已是 ds4/deepseek-flash）；已登记冷却，配额恢复后补核验"
+    },
+    {
+      "name": "pi",
+      "tier": "B",
+      "provider": "local-mlx",
+      "roles": [
+        "triage",
+        "docs",
+        "batch"
+      ],
+      "verified": true,
+      "enabled": true,
+      "subscription": "本机 MLX（零 token 消耗）",
+      "costClass": "local",
+      "dailyCap": 200,
+      "model": "Qwen3.8-27B（本机 MLX/omlx，另有智谱 provider 备用）",
+      "invocation": {
+        "command": "pi -p {brief}",
+        "proposed": false,
+        "channel": "shell",
+        "modelNote": "默认本机模型；cc-switch-zhipu-glm 为备用 provider"
+      },
+      "evidence": "2026-10-22 真实核验通过（默认 provider=omlx 本机 Qwen3.8-27B）"
+    }
+  ],
+  "routing": {
+    "principle": "贵的干难活，便宜的吃批量；未核验不上岗；高风险双引擎交叉复核"
+  }
+}

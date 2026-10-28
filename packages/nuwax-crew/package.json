@@ -1,0 +1,23 @@
+{
+  "name": "@nuwax-ai/devkit-crew",
+  "version": "0.1.0-devkit-local.1",
+  "private": true,
+  "description": "nuwax-crew：有限调用路由与执行验收（Python 标准库；运行仍需本机 Python>=3.10）",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "README.md",
+    "AGENTS.md",
+    "crew/",
+    "tests/",
+    "docs/",
+    "examples/",
+    "capability-matrix.json",
+    "registry.example.json"
+  ],
+  "scripts": {
+    "test": "python3 -B -m unittest discover -s tests -v"
+  }
+}

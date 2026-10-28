@@ -1,0 +1,8 @@
+{
+  "taskKey": "nw124-code-fix",
+  "kind": "implementation",
+  "risk": "high",
+  "repo": "pc-web",
+  "objective": "修复 NW-124 验证码提交后无反馈：下一步即发送并显示 59 秒倒计时，倒计时内重复点击被拦截",
+  "acceptance": ["原测试不回退", "ego-browser 实测登录流程"]
+}

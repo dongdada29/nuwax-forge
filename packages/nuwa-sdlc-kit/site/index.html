@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nuwa-sdlc-kit · 把 AI-Native SDLC 装进每个仓库</title>
+<meta name="description" content="把《AI-Native SDLC Playbook》的规则层做成一键安装、可升级、多 agent 兼容的工程套件。hooks 门禁 + 模板 + skills，一行装进仓库。">
+<meta property="og:title" content="nuwa-sdlc-kit · 把 AI-Native SDLC 装进每个仓库">
+<meta property="og:description" content="规则不靠自觉，装进仓库里。hooks 门禁 + 模板 + skills，一行安装，多 agent 兼容。">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#f6f4ec">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2064'%3E%3Cpath%20d='M32%204%2056%2014v20c0%2014-10%2022-24%2026C18%2056%208%2048%208%2034V14Z'%20fill='%23171610'/%3E%3Cpath%20d='M22%2032l7%207%2014-14'%20stroke='%23f6f4ec'%20stroke-width='5'%20fill='none'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* ── Swiss spec-sheet：暖纸面 + 墨线 + 信号橙 ────────────────── */
+:root {
+  --paper:    #f6f4ec;
+  --paper-2:  #efecdf;
+  --ink:      #171610;
+  --ink-2:    #46432f;
+  --muted:    #7c7761;
+  --line:     #171610;
+  --line-soft: rgba(23, 22, 16, 0.16);
+  --accent:     #d9481c;      /* 信号橙：门/停 */
+  --ok:         #1e6f3e;
+  --warn:       #9a6a12;
+  --bad:        #b3261c;
+  --term-bg:    #201f18;
+  --term-fg:    #e9e6d8;
+  --font-display: "Helvetica Neue", "SF Pro Display", -apple-system, system-ui, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-body:    -apple-system, system-ui, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-mono:    ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  --shadow-pop: 4px 4px 0 var(--ink);
+  --shadow-pop-lg: 6px 6px 0 var(--ink);
+}
+
+/* ── Base ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+::selection { background: var(--accent); color: var(--paper); }
+a { color: inherit; }
+img, svg { display: block; }
+button { font-family: inherit; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[id] { scroll-margin-top: 76px; }
+
+.wrap { max-width: 1160px; margin: 0 auto; padding-inline: 24px; }
+section { padding-block: clamp(56px, 8vw, 104px); }
+.mono { font-family: var(--font-mono); }
+
+/* 章节头：编号 + 墨线 */
+.sec-head { border-top: 2px solid var(--line); padding-top: 20px; margin: 0 0 clamp(32px, 4.5vw, 52px); display: grid; grid-template-columns: 110px 1fr; gap: 8px 28px; align-items: start; }
+.sec-no {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+  color: var(--accent); letter-spacing: 0.08em; padding-top: 8px;
+}
+h2 {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 46px);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0 0 14px;
+}
+.lead { font-size: 16.5px; line-height: 1.8; color: var(--ink-2); margin: 0; max-width: 640px; }
+.lead em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+/* ── Reveal ─────────────────────────────────────────────────── */
+[data-rv] { opacity: 0; transform: translateY(18px); transition: opacity 0.55s var(--e, ease), transform 0.55s var(--e, ease); }
+:root { --e: cubic-bezier(0.2, 0, 0, 1); }
+[data-rv].in { opacity: 1; transform: none; }
+
+/* ── Nav ────────────────────────────────────────────────────── */
+.nav {
+  position: fixed; inset: 0 0 auto 0; z-index: 50;
+  height: 58px;
+  background: var(--paper);
+  border-bottom: 2px solid var(--line);
+}
+.nav-inner {
+  max-width: 1160px; height: 100%; margin: 0 auto;
+  display: flex; align-items: center; gap: 20px;
+  padding-inline: 24px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); text-decoration: none; }
+.brand svg { flex: none; }
+.nav-links { display: flex; gap: 2px; margin-inline: auto; }
+.nav-links a {
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; color: var(--ink-2); text-decoration: none;
+  padding: 7px 11px;
+  transition: color 120ms, background 120ms;
+}
+.nav-links a:hover { color: var(--paper); background: var(--ink); }
+.chip-ver {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  color: var(--paper); background: var(--ink);
+  padding: 5px 12px;
+}
+.progress { position: absolute; left: 0; bottom: -2px; height: 2px; width: 0; background: var(--accent); }
+.nav-burger {
+  display: none;
+  width: 40px; height: 40px; padding: 0; margin-left: auto;
+  align-items: center; justify-content: center;
+  background: var(--paper); border: 1.5px solid var(--line);
+  color: var(--ink); cursor: pointer;
+}
+.nav-menu {
+  position: fixed; top: 58px; left: 0; right: 0; z-index: 49;
+  display: none; flex-direction: column;
+  padding: 10px 16px 16px;
+  background: var(--paper);
+  border-bottom: 2px solid var(--line);
+}
+.nav.open .nav-menu { display: flex; }
+.nav-menu a { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: none; padding: 12px 8px; border-bottom: 1px solid var(--line-soft); }
+.nav-menu a:last-child { border-bottom: 0; }
+
+/* ── Hero ───────────────────────────────────────────────────── */
+.hero { padding-top: clamp(120px, 15vh, 170px); padding-bottom: clamp(40px, 5vw, 64px); }
+.hero-meta {
+  display: flex; flex-wrap: wrap; gap: 8px 22px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  color: var(--ink-2); letter-spacing: 0.06em; text-transform: uppercase;
+  margin-bottom: 26px;
+}
+.hero-meta .tag-hot { color: var(--accent); }
+.hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(44px, 7.2vw, 92px);
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  margin: 0 0 26px;
+  max-width: 15ch;
+}
+.hero-title .hot { color: var(--accent); }
+.hero-sub { font-size: 17.5px; line-height: 1.8; color: var(--ink-2); max-width: 560px; margin: 0 0 36px; }
+.hero-sub em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+.install {
+  display: inline-flex; align-items: stretch; gap: 0;
+  max-width: 100%;
+  background: var(--ink); color: var(--term-fg);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-pop);
+}
+.install .pmt { font-family: var(--font-mono); color: var(--accent); user-select: none; padding: 14px 0 14px 16px; }
+.install code {
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.7;
+  padding: 14px 14px; text-align: left; overflow-wrap: anywhere;
+}
+.copy-btn {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; padding: 0; margin: 6px;
+  color: var(--term-fg); cursor: pointer;
+  background: transparent;
+  border: 1px solid rgba(233, 230, 216, 0.35);
+  transition: background 120ms, color 120ms;
+}
+.copy-btn:hover { background: var(--paper); color: var(--ink); }
+.copy-btn .i-check { display: none; }
+.copy-btn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+.copy-btn.ok .i-copy { display: none; }
+.copy-btn.ok .i-check { display: block; }
+
+.hero-specs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 30px; }
+.spec-chip {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--ink);
+  padding: 7px 12px;
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+}
+.spec-chip b { color: var(--accent); font-weight: 700; }
+.hero-next {
+  display: inline-block; margin-top: 34px;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--ink); text-decoration: none;
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 2px;
+}
+.hero-next:hover { color: var(--accent); }
+
+/* ── Signature duo：表单纸 × 终端 ───────────────────────────── */
+.duo-wrap { padding-top: 0; }
+.duo { display: grid; grid-template-columns: 1fr 64px 1fr; align-items: center; }
+.seam { position: relative; height: 100%; display: flex; align-items: center; justify-content: center; }
+.seam::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: var(--line); }
+.seam-chip {
+  position: relative; z-index: 2; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  color: var(--paper); background: var(--accent);
+  padding: 7px 13px;
+}
+.win { border: 2px solid var(--line); box-shadow: var(--shadow-pop-lg); text-align: left; }
+.win-form { background: #fbfaf5; }
+.win-term { background: var(--term-bg); }
+.win-bar {
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px;
+  border-bottom: 2px solid var(--line);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+}
+.win-form .win-bar { background: var(--paper-2); color: var(--ink); }
+.win-term .win-bar { background: #171610; color: var(--term-fg); border-bottom-color: #171610; }
+.win-badge { margin-left: auto; font-size: 11px; padding: 2px 9px; }
+.win-form .win-badge { color: var(--ink-2); border: 1px solid var(--line-soft); }
+.win-term .win-badge { color: var(--accent); border: 1px solid rgba(217, 72, 28, 0.5); }
+.plan-doc { padding: 4px 16px 16px; }
+.plan-item { display: flex; align-items: baseline; gap: 12px; padding: 13px 2px; border-bottom: 1px dashed var(--line-soft); }
+.plan-item:last-child { border-bottom: 0; }
+.plan-item .tag {
+  flex: none;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  color: var(--paper); background: var(--ink);
+  padding: 2px 8px;
+}
+.plan-item .t { font-size: 14px; font-weight: 700; }
+.plan-item .d { font-size: 12.5px; color: var(--muted); }
+
+/* ── Terminal ───────────────────────────────────────────────── */
+.term { margin: 0; padding: 16px 18px 18px; font-family: var(--font-mono); font-size: 12.5px; line-height: 2.05; color: var(--term-fg); overflow: auto; }
+.term .ln { display: block; opacity: 0; transform: translateY(4px); transition: opacity 0.3s, transform 0.3s; }
+.term .ln.on { opacity: 1; transform: none; }
+.t-p   { color: #8d8a75; }
+.t-ok  { color: #7fd194; }
+.t-bad { color: #ff8d75; }
+.t-warn{ color: #e8c06a; }
+.t-ac  { color: #ff7a4d; }
+.cursor {
+  display: inline-block; width: 0.55em; height: 1.05em;
+  vertical-align: -0.16em; overflow: hidden;
+  color: transparent; background: var(--accent);
+  animation: blink 1.1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ── Stats band：墨块反白 ───────────────────────────────────── */
+.stats { background: var(--ink); color: var(--paper); padding-block: clamp(36px, 5vw, 56px); }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; text-align: center; }
+.stat .num { font-family: var(--font-display); font-size: clamp(38px, 4.5vw, 60px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+.stat .num i { font-style: normal; color: var(--accent); }
+.stat .lbl { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: #b9b5a1; margin-top: 10px; letter-spacing: 0.04em; }
+
+/* ── Install / cards ────────────────────────────────────────── */
+.pgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+.opt {
+  border: 2px solid var(--line);
+  background: #fbfaf5;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: var(--shadow-pop);
+  transition: transform 140ms var(--e), box-shadow 140ms var(--e);
+}
+.opt:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-pop-lg); }
+.opt .k { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
+.opt .k::before { content: "▸ "; color: var(--accent); }
+.opt .d { font-size: 13.5px; line-height: 1.75; color: var(--ink-2); margin-top: 4px; }
+.opt .d code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: var(--paper-2); padding: 1px 6px; border: 1px solid var(--line-soft); }
+.cmd {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 10px 10px 14px;
+  background: var(--term-bg); color: var(--term-fg);
+  margin-top: auto;
+}
+.cmd .pmt { font-family: var(--font-mono); color: var(--accent); user-select: none; padding-top: 4px; }
+.cmd code { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.8; overflow-wrap: anywhere; }
+.cmd .copy-btn { width: 36px; height: 36px; margin: 0 0 0 auto; align-self: center; border-color: rgba(233, 230, 216, 0.35); }
+.note {
+  margin-top: 20px;
+  font-size: 13.5px; line-height: 1.8; color: var(--ink-2);
+  border: 2px dashed var(--line);
+  background: var(--paper-2);
+  padding: 14px 18px;
+}
+.note code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: #fbfaf5; padding: 1px 6px; border: 1px solid var(--line-soft); }
+.note strong { color: var(--ink); font-weight: 800; }
+
+/* ── Layers ─────────────────────────────────────────────────── */
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.layer { border: 2px solid var(--line); background: #fbfaf5; padding: 24px; box-shadow: var(--shadow-pop); }
+.layer:nth-child(2) { background: var(--paper-2); }
+.layer .no { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.1em; }
+.layer h3 { font-size: 18px; font-weight: 800; margin: 12px 0 10px; letter-spacing: -0.01em; }
+.layer p { font-size: 13.5px; line-height: 1.75; color: var(--ink-2); margin: 0; }
+.layer p code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: var(--paper-2); padding: 1px 5px; border: 1px solid var(--line-soft); }
+.layer .verdict { margin-top: 16px; padding-top: 14px; border-top: 2px solid var(--line); font-size: 13px; color: var(--ink); font-weight: 600; }
+.layer .verdict b { color: var(--accent); font-weight: 800; }
+
+/* ── Gates ──────────────────────────────────────────────────── */
+.gate { border: 2px solid var(--line); background: #fbfaf5; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--shadow-pop); }
+.gate-head { display: flex; align-items: center; gap: 10px; }
+.gate-head h3 { font-size: 14px; font-weight: 700; margin: 0; font-family: var(--font-mono); letter-spacing: 0.02em; }
+.band { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; padding: 3px 10px; margin-left: auto; color: var(--paper); }
+.band.block { background: var(--bad); }
+.band.ask   { background: var(--warn); }
+.band.allow { background: var(--ok); }
+.gate p { font-size: 13.5px; line-height: 1.75; color: var(--ink-2); margin: 0; }
+.gate p code { font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: var(--paper-2); padding: 1px 5px; border: 1px solid var(--line-soft); }
+.gate p b { color: var(--ink); }
+
+/* ── Steps ──────────────────────────────────────────────────── */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: step; }
+.step { border: 2px solid var(--line); background: #fbfaf5; padding: 24px; box-shadow: var(--shadow-pop); }
+.step h3 { font-size: 16px; font-weight: 800; margin: 0 0 10px; }
+.step h3::before {
+  counter-increment: step; content: counter(step, decimal-leading-zero);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  color: var(--paper); background: var(--accent);
+  padding: 2px 8px; margin-right: 10px;
+}
+.step p { font-size: 13.5px; line-height: 1.75; color: var(--ink-2); margin: 0; }
+
+/* ── Rollout ────────────────────────────────────────────────── */
+.repos { border: 2px solid var(--line); box-shadow: var(--shadow-pop); background: #fbfaf5; }
+.repo {
+  display: flex; align-items: center; gap: 14px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.repo:last-child { border-bottom: 0; }
+.repo .idx { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--accent); }
+.repo .name { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
+.repo .ref { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.repo .st { margin-left: auto; flex: none; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--paper); background: var(--ok); padding: 3px 10px; }
+
+/* ── Docs 入口卡 ────────────────────────────────────────────── */
+.krow { display: flex; align-items: baseline; gap: 8px; }
+.go { margin-left: auto; font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--accent); }
+a.opt { text-decoration: none; color: inherit; }
+a.opt:hover .k { color: var(--accent); }
+
+/* ── CTA：墨底 ──────────────────────────────────────────────── */
+.cta { background: var(--ink); color: var(--paper); }
+.cta .sec-head { border-top-color: var(--paper); }
+.cta .sec-no { color: var(--accent); }
+.cta .lead { color: #b9b5a1; }
+.cta .lead em { color: var(--paper); }
+.cta .install { background: var(--paper); color: var(--ink); border-color: var(--paper); box-shadow: 4px 4px 0 var(--accent); }
+.cta .install .pmt { color: var(--accent); }
+.cta .copy-btn { color: var(--ink); border-color: rgba(23, 22, 16, 0.35); }
+.cta .copy-btn:hover { background: var(--ink); color: var(--paper); }
+.cta .copy-btn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+.cta-note { font-size: 13.5px; color: #b9b5a1; margin: 18px 0 0; }
+.cta-note code { font-family: var(--font-mono); font-size: 12px; color: var(--paper); }
+.cta-panel { margin-top: 44px; display: grid; gap: 28px; }
+.plabel { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; }
+.cta .opt { background: var(--ink); color: var(--paper); border-color: var(--paper); box-shadow: 4px 4px 0 rgba(246, 244, 236, 0.25); }
+.cta .opt .k { color: var(--paper); }
+.cta .opt .d { color: #b9b5a1; }
+.cta .opt .d code { color: var(--paper); background: #2a2920; border-color: rgba(246, 244, 236, 0.2); }
+
+/* ── Footer ─────────────────────────────────────────────────── */
+.footer { border-top: 2px solid var(--line); padding: 26px 0 34px; }
+.footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+.footer p { font-size: 13px; color: var(--muted); margin: 0; font-family: var(--font-mono); }
+.footer a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--accent); }
+.footer a:hover { color: var(--accent); }
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .nav-links { display: none; }
+  .nav-burger { display: inline-flex; margin-left: auto; }
+  .duo { grid-template-columns: 1fr; gap: 22px; }
+  .seam { display: none; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 34px 16px; }
+  .pgrid, .grid3, .steps { grid-template-columns: 1fr; }
+  .sec-head { grid-template-columns: 1fr; }
+  .sec-no { padding-top: 0; }
+}
+@media (max-width: 560px) {
+  .wrap { padding-inline: 14px; }
+  .install { flex-direction: column; }
+  .install .pmt { padding: 12px 0 0 14px; }
+  .install .copy-btn { width: auto; margin: 6px; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  [data-rv] { opacity: 1; transform: none; transition: none; }
+  .term .ln { opacity: 1; transform: none; transition: none; }
+  .cursor { animation: none; }
+  .opt, .opt:hover { transform: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top">
+      <svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 4 56 14v20c0 14-10 22-24 26C18 56 8 48 8 34V14Z" fill="#171610"/><path d="M22 32l7 7 14-14" stroke="#f6f4ec" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      nuwa-sdlc-kit
+    </a>
+    <nav class="nav-links" aria-label="页面导航">
+      <a href="#install">01 安装</a>
+      <a href="#layers">02 模型</a>
+      <a href="#gates">03 门禁</a>
+      <a href="#agents">04 多AGENT</a>
+      <a href="#rollout">05 落地</a>
+      <a href="#docs">06 文档</a>
+    </nav>
+    <span class="chip-ver">v1.5.0</span>
+    <button class="nav-burger" id="nav-burger" aria-expanded="false" aria-label="打开菜单">
+      <svg width="18" height="18" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+    </button>
+    <div class="progress" id="progress" aria-hidden="true"></div>
+  </div>
+  <nav class="nav-menu" aria-label="页面导航">
+    <a href="#install">01 安装</a>
+    <a href="#layers">02 模型</a>
+    <a href="#gates">03 门禁</a>
+    <a href="#agents">04 多AGENT</a>
+    <a href="#rollout">05 落地</a>
+    <a href="#docs">06 文档</a>
+  </nav>
+</header>
+
+<main id="top">
+
+<section class="hero">
+  <div class="wrap">
+    <p class="hero-meta" data-rv><span class="tag-hot">SPEC NO. SDLK-2026</span><span>AI-NATIVE SDLC PLAYBOOK → 工程套件</span><span>STATUS: SHIPPED</span></p>
+    <h1 class="hero-title" data-rv>规则不靠自觉，<span class="hot">装进仓库里</span></h1>
+    <p class="hero-sub" data-rv>把《AI-Native SDLC Playbook》的规则层做成<em>一键安装、可升级、多 agent 兼容</em>的套件——v1.5.0 起 slim 地板档默认（秘钥/发布双门 + 一遍评审），完整工件链 full 档 opt-in，源自 nuwax / nuwa-cli / nuwa-browser 等仓的实战移植。</p>
+    <div class="install" data-rv>
+      <span class="pmt" aria-hidden="true">$</span>
+      <code>curl -fsSLk https://s3.nuwax.com:9443/nuwax-packages/agent-engines/nuwa-sdlc-kit/install.sh | bash</code>
+      <button class="copy-btn" data-copy="curl -fsSLk https://s3.nuwax.com:9443/nuwax-packages/agent-engines/nuwa-sdlc-kit/install.sh | bash" aria-label="复制安装命令">
+        <svg class="i-copy" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>
+        <svg class="i-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.5 12 13 4.5"/></svg>
+      </button>
+    </div>
+    <div class="hero-specs" data-rv>
+      <span class="spec-chip"><b>零依赖</b> · Node ≥ 18</span>
+      <span class="spec-chip">latest.json <b>+ sha256</b> 校验</span>
+      <span class="spec-chip">引擎跨仓<b>逐字节同构</b></span>
+      <span class="spec-chip">Claude / Codex / Cursor / ZCode</span>
+    </div>
+    <a class="hero-next" href="#duo" data-rv>看看它怎么守门 ↓</a>
+  </div>
+</section>
+
+<section class="duo-wrap" id="duo">
+  <div class="wrap">
+    <div class="duo">
+      <div class="win win-form" data-rv>
+        <div class="win-bar">
+          FORM A-01 · plans/
+          <span class="win-badge">人写的</span>
+        </div>
+        <div class="plan-doc">
+          <div class="plan-item">
+            <span class="tag">intent</span>
+            <span><span class="t">intent.md</span><span class="d"> —— 一句话说清要什么</span></span>
+          </div>
+          <div class="plan-item">
+            <span class="tag">plan</span>
+            <span><span class="t">plan.md</span><span class="d"> —— 怎么做、动哪些文件</span></span>
+          </div>
+          <div class="plan-item">
+            <span class="tag">spec</span>
+            <span><span class="t">spec.md</span><span class="d"> —— 验收标准，可执行</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="seam" aria-hidden="true"><span class="seam-chip">先计划，后动手</span></div>
+      <div class="win win-term" data-rv>
+        <div class="win-bar">
+          PRETOOLUSE · HOOKS
+          <span class="win-badge">kit 守的</span>
+        </div>
+        <pre class="term" id="duo-term" aria-label="门禁拦截示例"><span class="ln"><span class="t-p">$</span> agent：直接改 src/auth/login.ts</span>
+<span class="ln"><span class="t-p">PreToolUse</span> · Edit → src/auth/login.ts</span>
+<span class="ln"><span class="t-bad">⛔ plan-gate</span>：没有进行中的计划，先写 plan.md</span>
+<span class="ln"><span class="t-p">  （临时放行：NUWACLAW_SKIP_PLAN_GATE=1）</span></span>
+<span class="ln"><span class="t-p">$</span> agent：force push origin main</span>
+<span class="ln"><span class="t-bad">⛔ deploy-gate</span>：block 带，硬禁，只认配置修改</span>
+<span class="ln"><span class="t-p">$</span> <span class="t-ac">nuwa-sdlc check</span></span>
+<span class="ln"><span class="t-ok">✓</span> 体检通过（profile 分档）· 引擎件与 v1.5.0 逐字节一致<span class="cursor"></span></span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="stats" aria-label="数据一览">
+  <div class="wrap">
+    <div class="stats-grid">
+      <div class="stat" data-rv><div class="num" data-count="2">0</div><div class="lbl">道地板闸门（slim 默认）</div></div>
+      <div class="stat" data-rv><div class="num" data-count="11">0</div><div class="lbl">条 evals 用例（full · CI 门禁）</div></div>
+      <div class="stat" data-rv><div class="num" data-count="24">0</div><div class="lbl">项 full 面体检（slim 8 项）</div></div>
+      <div class="stat" data-rv><div class="num" data-count="5">0</div><div class="lbl">个仓库已落地</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">01 / INSTALL</div>
+      <div>
+        <h2 data-rv>一行装 kit，一行初始化项目</h2>
+        <p class="lead" data-rv>所有渠道装的是同一份东西；装完 <em>nuwa-sdlc</em> 命令即可用。重复执行 init/check 幂等，不用重装。</p>
+      </div>
+    </div>
+    <div class="pgrid" data-stagger>
+      <article class="opt" data-rv>
+        <div>
+          <div class="k">① Nuwax S3 一键装（推荐）</div>
+          <div class="d">免克隆仓库、零配置。拉 <code>latest.json</code> → 下载 tar.gz → <code>sha256</code> 校验 → 装到 <code>~/.nuwa-sdlc-kit/&lt;版本&gt;/</code> → 软链 <code>~/.local/bin/nuwa-sdlc</code>（确认其在 PATH 里）。</div>
+        </div>
+        <div class="cmd">
+          <span class="pmt" aria-hidden="true">$</span>
+          <code>curl -fsSLk https://s3.nuwax.com:9443/nuwax-packages/agent-engines/nuwa-sdlc-kit/install.sh | bash</code>
+          <button class="copy-btn" data-copy="curl -fsSLk https://s3.nuwax.com:9443/nuwax-packages/agent-engines/nuwa-sdlc-kit/install.sh | bash" aria-label="复制：S3 一键装"></button>
+        </div>
+      </article>
+      <article class="opt" data-rv>
+        <div>
+          <div class="k">② npx 直装（免装 kit）</div>
+          <div class="d">npm 已发包，tag <code>v*</code> 自动发布；适合只想播种单个项目、不装全局命令的场景。</div>
+        </div>
+        <div class="cmd">
+          <span class="pmt" aria-hidden="true">$</span>
+          <code>npx --yes @nuwax-ai/nuwa-sdlc-kit init --dir &lt;目标仓&gt; --name myrepo --test 'pnpm test'</code>
+          <button class="copy-btn" data-copy="npx --yes @nuwax-ai/nuwa-sdlc-kit init --dir <目标仓> --name myrepo --test 'pnpm test'" aria-label="复制：npx 直装"></button>
+        </div>
+      </article>
+      <article class="opt" data-rv>
+        <div>
+          <div class="k">③ 本仓直用</div>
+          <div class="d">改完引擎想立刻试：直接以 node 跑 <code>cli.mjs</code>，旗标与装完的命令完全一致。</div>
+        </div>
+        <div class="cmd">
+          <span class="pmt" aria-hidden="true">$</span>
+          <code>node /path/to/nuwa-sdlc-kit/cli.mjs init --dir &lt;目标仓&gt; --name myrepo --test 'pnpm test'</code>
+          <button class="copy-btn" data-copy="node /path/to/nuwa-sdlc-kit/cli.mjs init --dir <目标仓> --name myrepo --test 'pnpm test'" aria-label="复制：本仓直用"></button>
+        </div>
+      </article>
+      <article class="opt" data-rv>
+        <div>
+          <div class="k">初始化（装完 kit 后，项目维度）</div>
+          <div class="d"><code>--profile slim|full</code> 安装面档位（新仓默认 slim 地板档，老仓无字段视为 full）· <code>--src</code> plan-gate 源码区正则（仅 full，逗号分隔）· <code>--test</code> 全量测试命令 · <code>--env-prefix</code> 停用开关前缀 · <code>--protected</code> 受保护写入路径 · <code>--grill</code> 本仓特有拷问项 · <code>--pre-commit</code> 顺带装秘钥地板 · <code>--ci</code> 挑 CI 模板（github/gitlab/both，默认按 origin 自动识别）。</div>
+        </div>
+        <div class="cmd">
+          <span class="pmt" aria-hidden="true">$</span>
+          <code>nuwa-sdlc init --name nuwax --src 'src/' --test 'pnpm exec vitest run' --env-prefix NUWACLAW --grill ./grill-extra.md</code>
+          <button class="copy-btn" data-copy="nuwa-sdlc init --name nuwax --src 'src/' --test 'pnpm exec vitest run' --env-prefix NUWACLAW --grill ./grill-extra.md" aria-label="复制：init 真实样例"></button>
+        </div>
+      </article>
+    </div>
+    <p class="note" data-rv><strong>已有项目升级：</strong>新版本发布后重跑 ① + <code>nuwa-sdlc upgrade --dir &lt;仓&gt;</code> 即可全量跟平（只刷引擎件，内容件不动）；<code>nuwa-sdlc check --dir &lt;仓&gt;</code> 做分档体检（按 .sdlc.json profile），exit 1 = 有漂移。</p>
+  </div>
+</section>
+
+<section id="layers">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">02 / MODEL</div>
+      <div>
+        <h2 data-rv>三层内容观——升级语义的根</h2>
+        <p class="lead" data-rv>哪些文件 kit 替你管、哪些归仓库自己演化，边界画死。差异全部走 <em>.sdlc.json</em> 运行时配置，<em>引擎文件跨仓逐字节相同</em>。</p>
+      </div>
+    </div>
+    <div class="grid3" data-stagger>
+      <article class="layer" data-rv>
+        <div class="no">ENGINE · 引器件</div>
+        <h3>kit 托管，upgrade 覆盖</h3>
+        <p>slim：<code>guard-paths.mjs</code> · <code>deploy-gate.mjs</code>；full 另含 <code>plan-gate.mjs</code> · <code>sdlc-evals.mjs</code>；含 <code>.claude/settings.json</code> / <code>.zcode/config.json</code> 合并项。</p>
+        <div class="verdict"><b>upgrade 只刷这一层</b>——跨仓行为一致，出问题一处修处处生效。</div>
+      </article>
+      <article class="layer" data-rv>
+        <div class="no">CONTENT · 内容件</div>
+        <h3>播种一次，本地所有</h3>
+        <p>full：<code>templates/</code> 三件 · skills 双落点 · <code>REVIEW.md</code>（五遍清单） · <code>verifier.md</code> · <code>samples/</code> · CI workflow；slim 只播单件 plan 模板 + 单遍 <code>REVIEW.md</code>。</p>
+        <div class="verdict">安装器<b>永不覆盖</b>——仓库自行演化，是你的文档与流程资产。</div>
+      </article>
+      <article class="layer" data-rv>
+        <div class="no">ENTRY · 入口层</div>
+        <h3>托管区间，两头相安</h3>
+        <p><code>AGENTS.md</code> 的 <code>nuwa-sdlc-kit:begin/end</code> 注释对内由 kit 管理。</p>
+        <div class="verdict">只替换区间内内容，<b>区间外归仓库</b>。</div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="gates">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">03 / GUARDS</div>
+      <div>
+        <h2 data-rv>门禁不商量，分带处理</h2>
+        <p class="lead" data-rv>hooks 在 <em>PreToolUse</em> 拦截：秘钥不落地、没计划不动手、发布类命令按带放行。停用走显式环境变量，留痕可审计。</p>
+      </div>
+    </div>
+    <div class="grid3" data-stagger>
+      <article class="gate" data-rv>
+        <div class="gate-head"><h3>guard-paths</h3><span class="band block">BLOCK</span></div>
+        <p>秘钥与受保护路径护栏：检测到密钥写入即拦；<code>--protected</code> 声明的文件进受保护清单。</p>
+      </article>
+      <article class="gate" data-rv>
+        <div class="gate-head"><h3>plan-gate</h3><span class="band ask">ASK</span></div>
+        <p>full 档专属：源码区（<code>--src</code> 正则）改动前必须有进行中的计划；slim 仓不装本闸门。临时放行：<code>&lt;PREFIX&gt;_SKIP_PLAN_GATE=1</code>。</p>
+      </article>
+      <article class="gate" data-rv>
+        <div class="gate-head"><h3>deploy-gate</h3><span class="band allow">3 BANDS</span></div>
+        <p>发布类命令分带：<b>block</b>（force push 硬禁）/ <b>ask</b>（人工 <code>SDLC_APPROVE_DEPLOY=1</code> 批准）/ <b>allow</b>（默认带开洞）。带表在 <code>.sdlc.json</code> 配置。</p>
+      </article>
+      <article class="gate" data-rv>
+        <div class="gate-head"><h3>pre-commit</h3><span class="band block">FLOOR</span></div>
+        <p>git pre-commit 秘钥地板——agent 无关的强制层，<code>init --pre-commit</code> 直装 <code>.git/hooks/</code>。</p>
+      </article>
+      <article class="gate" data-rv>
+        <div class="gate-head"><h3>sdlc-evals</h3><span class="band allow">CI</span></div>
+        <p>full 档 CI 门禁：对已装 hooks 灌样本事件断言 exit code，11 条用例覆盖三道闸门；规则文件变更时自动触发（GitHub workflow / GitLab CI 模板按远端挑选）。</p>
+      </article>
+      <article class="gate" data-rv>
+        <div class="gate-head"><h3>acp-gate</h3><span class="band ask">PLATFORM</span></div>
+        <p>ACP 层参考实现：nuwa-cli serve 读工作区 <code>.sdlc.json</code>，对 <code>session/request_permission</code> 做 deny/ask——serve 托管的所有引擎统一生效；slim 仓 <code>.sdlc.json</code> 不写 <code>srcPaths</code>，计划 ask 天然静默，只保留秘钥/发布拦截。</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="agents">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">04 / AGENTS</div>
+      <div>
+        <h2 data-rv>多 agent 兼容，三档保底</h2>
+        <p class="lead" data-rv>不绑死任何一个引擎：正文是通用 markdown，逐工具的能力差异显式承认，硬约束下沉到 agent 碰不到的层。</p>
+      </div>
+    </div>
+    <div class="steps" data-stagger>
+      <article class="step" data-rv>
+        <h3>通用层</h3>
+        <p>AGENTS.md / templates / REVIEW.md / skills 正文全是 markdown——codex、opencode、cursor 等直接读；skills 双落点 <code>.claude/skills/</code> + <code>.agents/skills/</code>，ZCode workspace 级原生自动发现。</p>
+      </article>
+      <article class="step" data-rv>
+        <h3>逐工具适配</h3>
+        <p>PreToolUse hooks 在 Claude Code（<code>.claude/settings.json</code>）与 ZCode（<code>.zcode/config.json</code>，v1.5.0 起合入）都强制执行；verifier 的等价物 = 跑测试命令按格式贴结论。</p>
+      </article>
+      <article class="step" data-rv>
+        <h3>地板层</h3>
+        <p>非协商护栏下沉 git pre-commit / CI / ACP 网关——agent 无关的强制点，谁开车都翻不过去。</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="rollout">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">05 / SHIPPED</div>
+      <div>
+        <h2 data-rv>五仓已全部落地，真实在用</h2>
+        <p class="lead" data-rv>不是 demo。四仓已转换 kit <em>v1.5.0</em> slim 地板档在用；nuwax-client 按实战结论手工精简为地板版——v1.5.0 把这条实战结论做回默认安装面。</p>
+      </div>
+    </div>
+    <div class="repos" data-stagger>
+      <div class="repo" data-rv><span class="idx">R1</span><span class="name">nuwax</span><span class="ref">d92293f77 · dev</span><span class="st">slim 档</span></div>
+      <div class="repo" data-rv><span class="idx">R2</span><span class="name">nuwa-cli</span><span class="ref">85456d1 + faa584e（ACP 门禁）</span><span class="st">slim 档</span></div>
+      <div class="repo" data-rv><span class="idx">R3</span><span class="name">nuwa-browser</span><span class="ref">75caa39</span><span class="st">slim 档</span></div>
+      <div class="repo" data-rv><span class="idx">R4</span><span class="name">nuwax-swarm</span><span class="ref">a6f26aa · ai-native-sdlc-w1</span><span class="st">slim 档</span></div>
+      <div class="repo" data-rv><span class="idx">R5</span><span class="name">nuwax-client</span><span class="ref">仓内精简版：地板双 hook + 一遍 REVIEW（d463817f）</span><span class="st">地板版</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="docs">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">06 / DOCS</div>
+      <div>
+        <h2 data-rv>使用说明入口</h2>
+        <p class="lead" data-rv>安装、初始化、体检升级与门禁配置的完整说明在文档里维护，这里只留入口，不展开具体落地项目。</p>
+      </div>
+    </div>
+    <div class="pgrid" data-stagger>
+      <a class="opt" href="https://www.npmjs.com/package/@nuwax-ai/nuwa-sdlc-kit#readme" target="_blank" rel="noopener" data-rv>
+        <div class="krow"><div class="k">npm 包页 · 使用说明</div><span class="go">↗</span></div>
+        <div class="d">README 随每个版本发布在 npm 包页，公共可读，与已发布的 kit 版本严格同源。</div>
+        <div class="cmd"><code>npmjs.com/package/@nuwax-ai/nuwa-sdlc-kit#readme</code></div>
+      </a>
+      <a class="opt" href="https://s3.nuwax.com:9443/nuwax-packages/agent-engines/nuwa-sdlc-kit/docs/README.md" target="_blank" rel="noopener" data-rv>
+        <div class="krow"><div class="k">S3 直链 · 匿名可读</div><span class="go">↗</span></div>
+        <div class="d">与介绍页同一分发渠道，<code>publish-s3.sh</code> 每次发布同步上传，免登录直达。</div>
+        <div class="cmd"><code>…/nuwa-sdlc-kit/docs/README.md</code></div>
+      </a>
+      <a class="opt" href="https://github.com/dongdada29/nuwa-sdlc-kit" target="_blank" rel="noopener" data-rv>
+        <div class="krow"><div class="k">源码仓库 · 全量内容</div><span class="go">↗</span></div>
+        <div class="d">README 之外还有 <code>kit/content/</code> 模板与样例、CI 模板、引擎源码——改规则的人看这里。</div>
+        <div class="cmd"><code>github.com/dongdada29/nuwa-sdlc-kit</code></div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="cta" id="cta">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">07 / READY</div>
+      <div>
+        <h2 data-rv>把工程纪律，交给安装器</h2>
+        <p class="lead" data-rv>一行装 kit，一行初始化项目，Agent 从此先计划后动手。</p>
+      </div>
+    </div>
+    <div class="install" data-rv>
+      <span class="pmt" aria-hidden="true">$</span>
+      <code>curl -fsSLk https://s3.nuwax.com:9443/nuwax-packages/agent-engines/nuwa-sdlc-kit/install.sh | bash</code>
+      <button class="copy-btn" data-copy="curl -fsSLk https://s3.nuwax.com:9443/nuwax-packages/agent-engines/nuwa-sdlc-kit/install.sh | bash" aria-label="复制安装命令">
+        <svg class="i-copy" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>
+        <svg class="i-check" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.5 12 13 4.5"/></svg>
+      </button>
+    </div>
+    <p class="cta-note" data-rv>装完即可初始化：<code>nuwa-sdlc init --name &lt;repo&gt; --test '&lt;cmd&gt;'</code></p>
+    <div class="cta-panel" data-rv>
+      <div>
+        <div class="plabel">日常运维</div>
+        <div class="pgrid">
+          <article class="opt">
+            <div>
+              <div class="k">体检</div>
+              <div class="d">分档引擎漂移/缺失检查（slim/full），exit 1 = 有问题</div>
+            </div>
+            <div class="cmd">
+              <span class="pmt" aria-hidden="true">$</span>
+              <code>nuwa-sdlc check --dir &lt;仓&gt;</code>
+              <button class="copy-btn" data-copy="nuwa-sdlc check --dir <仓>" aria-label="复制：体检"></button>
+            </div>
+          </article>
+          <article class="opt">
+            <div>
+              <div class="k">升级</div>
+              <div class="d">只刷引擎件 + settings 合并 + 托管区间，内容件不动</div>
+            </div>
+            <div class="cmd">
+              <span class="pmt" aria-hidden="true">$</span>
+              <code>nuwa-sdlc upgrade --dir &lt;仓&gt;</code>
+              <button class="copy-btn" data-copy="nuwa-sdlc upgrade --dir <仓>" aria-label="复制：升级"></button>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div>
+        <div class="plabel">其他渠道</div>
+        <div class="pgrid">
+          <article class="opt">
+            <div>
+              <div class="k">npx（npm 已发包）</div>
+              <div class="d">免装 kit，直接播种单个项目</div>
+            </div>
+            <div class="cmd">
+              <span class="pmt" aria-hidden="true">$</span>
+              <code>npx --yes @nuwax-ai/nuwa-sdlc-kit init --dir &lt;目标仓&gt; --name myrepo --test 'pnpm test'</code>
+              <button class="copy-btn" data-copy="npx --yes @nuwax-ai/nuwa-sdlc-kit init --dir <目标仓> --name myrepo --test 'pnpm test'" aria-label="复制：npx"></button>
+            </div>
+          </article>
+          <article class="opt">
+            <div>
+              <div class="k">维护者发布</div>
+              <div class="d">S3：凭证走 <code>~/.aws</code> 或 <code>NUWAX_S3_*</code>；npm：打 tag 触发 CI</div>
+            </div>
+            <div class="cmd">
+              <span class="pmt" aria-hidden="true">$</span>
+              <code>bash scripts/publish-s3.sh &amp;&amp; git tag v1.x.x &amp;&amp; git push origin v1.x.x</code>
+              <button class="copy-btn" data-copy="bash scripts/publish-s3.sh && git tag v1.x.x && git push origin v1.x.x" aria-label="复制：发布"></button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>nuwa-sdlc-kit · MIT · <a href="https://github.com/dongdada29/nuwa-sdlc-kit" target="_blank" rel="noopener">源码仓库</a> · <a href="https://www.npmjs.com/package/@nuwax-ai/nuwa-sdlc-kit" target="_blank" rel="noopener">npm</a> · Nuwax S3 分发 · © 2026 Nuwax</p>
+    <p>源自 nuwax / nuwa-cli / nuwa-browser / nuwax-client / nuwax-swarm 实战移植</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+  var $ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };
+
+  /* ── Mobile menu ─────────────────────────────────────────── */
+  var nav = document.getElementById("nav");
+  var burger = document.getElementById("nav-burger");
+  if (burger) {
+    burger.addEventListener("click", function () {
+      var open = nav.classList.toggle("open");
+      burger.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    $(".nav-menu a", nav).forEach(function (a) {
+      a.addEventListener("click", function () { nav.classList.remove("open"); });
+    });
+  }
+
+  /* ── Stagger delays ──────────────────────────────────────── */
+  $("[data-stagger]").forEach(function (group) {
+    $("[data-rv]", group).forEach(function (el, i) {
+      el.style.transitionDelay = (i * 80) + "ms";
+    });
+  });
+
+  /* ── Reveal on intersect ─────────────────────────────────── */
+  var revealEls = $("[data-rv]");
+  if (RM || !("IntersectionObserver" in window)) {
+    revealEls.forEach(function (el) { el.classList.add("in"); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.classList.add("in");
+          io.unobserve(e.target);
+          setTimeout(function () { e.target.style.transitionDelay = ""; }, 1000);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0% -7% 0px" });
+    revealEls.forEach(function (el) { io.observe(el); });
+  }
+
+  /* ── Count-up (easeOutCubic) ─────────────────────────────── */
+  function runCount(el) {
+    var target = parseFloat(el.getAttribute("data-count"));
+    if (RM) { el.textContent = target; return; }
+    var t0 = performance.now(), dur = 1100;
+    (function frame(t) {
+      var p = clamp((t - t0) / dur, 0, 1);
+      var e = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * e);
+      if (p < 1) requestAnimationFrame(frame);
+    })(t0);
+  }
+  var counters = $("[data-count]");
+  if (RM || !("IntersectionObserver" in window)) {
+    counters.forEach(runCount);
+  } else {
+    var cio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { runCount(e.target); cio.unobserve(e.target); }
+      });
+    }, { threshold: 0.6 });
+    counters.forEach(function (c) { cio.observe(c); });
+  }
+
+  /* ── Terminal line-by-line (120ms/line) ──────────────────── */
+  function typeTerm(pre, startDelay) {
+    var lns = $(".ln", pre);
+    if (RM) { lns.forEach(function (n) { n.classList.add("on"); }); return; }
+    lns.forEach(function (n, i) {
+      setTimeout(function () { n.classList.add("on"); }, (startDelay || 0) + 120 + i * 120);
+    });
+  }
+  var duoTerm = document.getElementById("duo-term");
+  if (duoTerm) {
+    if (RM || !("IntersectionObserver" in window)) {
+      typeTerm(duoTerm, 0);
+    } else {
+      var dio = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { typeTerm(duoTerm, 120); dio.disconnect(); }
+        });
+      }, { threshold: 0.3 });
+      dio.observe(duoTerm);
+    }
+  }
+
+  /* ── Copy buttons ────────────────────────────────────────── */
+  $(".copy-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = btn.getAttribute("data-copy");
+      function done() {
+        btn.classList.add("ok");
+        setTimeout(function () { btn.classList.remove("ok"); }, 1600);
+      }
+      function fallback() {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch (err) {}
+        document.body.removeChild(ta); done();
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else { fallback(); }
+    });
+  });
+
+  /* ── Scroll-driven: progress bar ─────────────────────────── */
+  var progress = document.getElementById("progress");
+  function update() {
+    var sy = window.scrollY || window.pageYOffset;
+    var sh = document.documentElement.scrollHeight - window.innerHeight;
+    if (progress) progress.style.width = (sh > 0 ? clamp(sy / sh, 0, 1) * 100 : 0) + "%";
+  }
+  var ticking = false;
+  function onScroll() {
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(function () { update(); ticking = false; });
+    }
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll, { passive: true });
+  update();
+})();
+</script>
+
+</body>
+</html>

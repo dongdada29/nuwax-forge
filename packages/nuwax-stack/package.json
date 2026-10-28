@@ -1,0 +1,22 @@
+{
+  "name": "@nuwax-ai/devkit-stack",
+  "version": "0.1.0-devkit-local.1",
+  "private": true,
+  "description": "nuwax-stack：任务状态、恢复与验收证据（Python skill 资源，含 scripts；运行仍需本机 Python>=3.10）",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "README.md",
+    "AGENTS.md",
+    "skills/",
+    "docs/",
+    "tests/",
+    "config/",
+    "scripts/"
+  ],
+  "scripts": {
+    "test": "python3 -B -m unittest discover -s tests -v"
+  }
+}

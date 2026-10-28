@@ -1,0 +1,7 @@
+{
+  "taskKey": "triage-pending-11",
+  "kind": "triage",
+  "risk": "low",
+  "objective": "对前端矩阵 11 项 pending-triage 逐项给出分诊结论并入库",
+  "acceptance": ["每项有分诊结论", "任务键去重"]
+}

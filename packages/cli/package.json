@@ -1,0 +1,28 @@
+{
+  "name": "@nuwax-ai/devkit-cli",
+  "version": "0.1.0-devkit-local.1",
+  "private": true,
+  "description": "nuwax-devkit CLI（nuwax-devkit）：doctor / init / verify 的零依赖 Node ESM 入口",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "nuwax-devkit": "./bin/nuwax-devkit.mjs"
+  },
+  "files": [
+    "README.md",
+    "bin/",
+    "lib/"
+  ],
+  "dependencies": {
+    "@nuwax-ai/devkit-contracts": "0.1.0-devkit-local.1",
+    "@nuwax-ai/devkit-crew": "0.1.0-devkit-local.1",
+    "@nuwax-ai/devkit-stack": "0.1.0-devkit-local.1",
+    "@nuwax-ai/nuwa-sdlc-kit": "1.5.0-devkit-local.1"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

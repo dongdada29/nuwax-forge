@@ -1,0 +1,38 @@
+{
+  "name": "@nuwax-ai/nuwa-sdlc-kit",
+  "version": "1.5.0-devkit-local.1",
+  "description": "AI-Native SDLC 规则层套件：一键安装/升级/多 agent 兼容（hooks 门禁 + 模板 + skills）",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "nuwa-sdlc": "./cli.mjs",
+    "nuwa-sdlc-kit": "./cli.mjs"
+  },
+  "engines": {
+    "node": ">=18.14"
+  },
+  "files": [
+    "cli.mjs",
+    "install.sh",
+    "kit/",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "bump": "node scripts/bump-version.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dongdada29/nuwa-sdlc-kit.git"
+  },
+  "bugs": "https://github.com/dongdada29/nuwa-sdlc-kit/issues",
+  "homepage": "https://github.com/dongdada29/nuwa-sdlc-kit#readme",
+  "keywords": [
+    "sdlc",
+    "claude-code",
+    "hooks",
+    "agents",
+    "ai-native",
+    "guardrails"
+  ]
+}

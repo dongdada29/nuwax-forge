@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "mode": "analysis-only",
+  "repositories": [
+    {
+      "alias": "web-example",
+      "computerId": "REPLACE_WITH_CONFIGURED_COMPUTER_ID",
+      "root": "/absolute/path/to/repository",
+      "readTools": ["REPLACE_WITH_AVAILABLE_READ_TOOL_NAMES"],
+      "verificationCommand": null
+    }
+  ],
+  "trigger": {
+    "directRequest": true,
+    "mentionFromPlatformMetadata": true,
+    "keywords": ["#需求", "#bug"],
+    "ignoreOwnMessages": true
+  },
+  "audit": {
+    "mode": "reply-only",
+    "directory": null
+  },
+  "documents": {
+    "baseUrl": "https://agent.nuwax.com",
+    "sourcePageIds": [],
+    "ownedLedgerPageId": null,
+    "syncDirection": "source-to-owned-only",
+    "writeSourceDocuments": false
+  },
+  "implementation": {
+    "enabled": false
+  }
+}

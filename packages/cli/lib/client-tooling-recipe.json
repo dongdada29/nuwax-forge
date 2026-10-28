@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "client-tooling-regression",
+  "level": "source-tooling",
+  "inputs": [
+    "scripts/client",
+    "scripts/client-cli.test.mjs",
+    "scripts/client-dev.test.mjs",
+    "scripts/client-prepare.test.mjs",
+    "scripts/sdlc-verify.mjs",
+    "client.config.mjs",
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "stages": [
+    {
+      "id": "doctor-schema",
+      "predicate": "doctor-reports-structured-readiness",
+      "argv": ["{node}", "scripts/client/cli.mjs", "doctor", "--json"],
+      "jsonTypes": {"ready": "boolean", "issues": "array"},
+      "timeoutMs": 30000
+    },
+    {
+      "id": "cli",
+      "predicate": "cli-rejects-invalid-and-contradictory-options",
+      "argv": ["{node}", "--test", "scripts/client-cli.test.mjs"],
+      "timeoutMs": 30000
+    },
+    {
+      "id": "dev",
+      "predicate": "dev-readiness-and-owned-process-cleanup",
+      "argv": ["{node}", "--test", "scripts/client-dev.test.mjs"],
+      "timeoutMs": 30000
+    },
+    {
+      "id": "prepare",
+      "predicate": "prepare-reuses-cache-and-invalidates-changed-inputs",
+      "argv": ["{node}", "--test", "scripts/client-prepare.test.mjs"],
+      "timeoutMs": 60000
+    }
+  ]
+}

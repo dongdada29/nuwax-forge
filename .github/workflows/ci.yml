@@ -1,0 +1,18 @@
+# CI 定义（未在远程运行过，不声称已跑；本机运行时未改动）。本地等价命令即 README 的 install/test/pack。
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'   # stack/crew 引擎要求 >=3.10；CI 显式固定 3.12
+      - run: npm install --ignore-scripts --offline --no-audit --no-fund
+      - run: npm test
+      - run: npm run contracts:check
+      - run: npm run pack -- --out "$RUNNER_TEMP/tarballs"

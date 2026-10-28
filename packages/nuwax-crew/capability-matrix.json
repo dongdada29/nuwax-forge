@@ -1,0 +1,235 @@
+{
+ "updated": "2026-10-25",
+ "levels": {
+  "L5": "旗舰：复杂架构、跨仓重构、疑难调试",
+  "L4": "主力：多文件实施、代码审查",
+  "L3": "标准：单文件常规改动、文档",
+  "L2": "轻量：分诊、总结、批量核对、格式化",
+  "FX": "专用：非通用模型执行器"
+ },
+ "models": [
+  {
+   "model": "openai/gpt-6-astra(-fast)",
+   "carrier": "opencode(openai-oauth)",
+   "level": "L5",
+   "cost": "订阅额度",
+   "status": "待实测"
+  },
+  {
+   "model": "openai/gpt-5.6-luna/sol/terra",
+   "carrier": "opencode(openai-oauth)",
+   "level": "L5",
+   "cost": "订阅额度",
+   "status": "待实测"
+  },
+  {
+   "model": "openai/gpt-5.5(-fast)",
+   "carrier": "opencode(openai-oauth)",
+   "level": "L4",
+   "cost": "订阅额度",
+   "status": "待实测"
+  },
+  {
+   "model": "openai/gpt-5.4(-fast/-mini/-mini-flex)",
+   "carrier": "opencode(openai-oauth)",
+   "level": "L3",
+   "cost": "订阅额度",
+   "status": "待实测"
+  },
+  {
+   "model": "openai/gpt-5.3-codex-spark",
+   "carrier": "opencode(openai-oauth)",
+   "level": "L4",
+   "cost": "订阅额度",
+   "status": "待实测",
+   "fit": "代码专项"
+  },
+  {
+   "model": "claude-opus-5.5(h/m/l)",
+   "carrier": "agy(antigravity)",
+   "level": "L5",
+   "cost": "订阅额度",
+   "status": "配额受限"
+  },
+  {
+   "model": "claude-sonnet-5.5(h/m/l)",
+   "carrier": "agy(antigravity)",
+   "level": "L4",
+   "cost": "订阅额度",
+   "status": "配额受限"
+  },
+  {
+   "model": "gemini-4-argon(h/m/l)",
+   "carrier": "agy(antigravity)",
+   "level": "L5",
+   "cost": "订阅额度",
+   "status": "待实测"
+  },
+  {
+   "model": "gemini-3.8-flash(h/m/l)",
+   "carrier": "agy(antigravity)",
+   "level": "L3",
+   "cost": "订阅额度",
+   "status": "✅已实测"
+  },
+  {
+   "model": "gpt-oss-120b-medium",
+   "carrier": "agy(antigravity)",
+   "level": "L2",
+   "cost": "订阅额度",
+   "status": "配额受限"
+  },
+  {
+   "model": "zhipu/glm-5.3",
+   "carrier": "opencode(zhipu-key)",
+   "level": "L4",
+   "cost": "Token Plan Max",
+   "status": "✅已实测"
+  },
+  {
+   "model": "zhipu/glm-5.3-flash",
+   "carrier": "opencode(zhipu-key)",
+   "level": "L2",
+   "cost": "Token Plan Max",
+   "status": "✅已实测"
+  },
+  {
+   "model": "opencode/glm-5.3-flash-free",
+   "carrier": "opencode(免费档)",
+   "level": "L2",
+   "cost": "免费",
+   "status": "✅已实测（6个；longcat 上游不可用）"
+  },
+  {
+   "model": "opencode/deepseek-v4.1-flash-free",
+   "carrier": "opencode(免费档)",
+   "level": "L2",
+   "cost": "免费",
+   "status": "✅已实测（6个；longcat 上游不可用）"
+  },
+  {
+   "model": "opencode/mimo-v2.6-flash-free",
+   "carrier": "opencode(免费档)",
+   "level": "L2",
+   "cost": "免费",
+   "status": "✅已实测（6个；longcat 上游不可用）"
+  },
+  {
+   "model": "opencode/minimax-m3.1-flash-free",
+   "carrier": "opencode(免费档)",
+   "level": "L2",
+   "cost": "免费",
+   "status": "✅已实测（6个；longcat 上游不可用）"
+  },
+  {
+   "model": "opencode/nemotron-3(ultra/3.5)-free",
+   "carrier": "opencode(免费档)",
+   "level": "L2",
+   "cost": "免费",
+   "status": "✅已实测（6个；longcat 上游不可用）"
+  },
+  {
+   "model": "opencode/beam-free / flint-40b-free / longcat-2.5-preview-free",
+   "carrier": "opencode(免费档)",
+   "level": "L2",
+   "cost": "免费",
+   "status": "✅已实测（6个；longcat 上游不可用）"
+  },
+  {
+   "model": "grok(默认模型)",
+   "carrier": "grok CLI(PRO)",
+   "level": "L4",
+   "cost": "PRO $20",
+   "status": "✅已实测"
+  },
+  {
+   "model": "codex(内置模型)",
+   "carrier": "codex CLI(PRO)",
+   "level": "L5",
+   "cost": "PRO $100",
+   "status": "✅历史验证"
+  },
+  {
+   "model": "claude-code → glm-5.3（已配置智谱）",
+   "carrier": "claude CLI",
+   "level": "L4",
+   "cost": "智谱 Token Plan Max",
+   "status": "✅历史验证"
+  },
+  {
+   "model": "cursor(内置模型)",
+   "carrier": "cursor-agent CLI",
+   "level": "L4",
+   "cost": "Cursor 订阅",
+   "status": "✅已实测"
+  },
+  {
+   "model": "Qwen3.8-27B（pi 本机 MLX）",
+   "carrier": "pi -p（默认 provider=omlx）",
+   "level": "L2",
+   "cost": "本机免费（零 token）",
+   "status": "✅已实测"
+  },
+  {
+   "model": "glm-5.3 (zcode, 1M ctx)",
+   "carrier": "zcode-cli(coding-plan-account)",
+   "level": "L4",
+   "cost": "智谱 Coding Plan Max（5h 重置）",
+   "status": "已实测"
+  },
+  {
+   "model": "glm-5.3 (cc-switch)",
+   "carrier": "omp",
+   "level": "L4",
+   "cost": "智谱 Coding Plan Max（5h 重置）",
+   "status": "已实测"
+  },
+  {
+   "model": "glm-5.3-flash (zcode)",
+   "carrier": "zcode-cli(coding-plan-account)",
+   "level": "L2",
+   "cost": "智谱 Coding Plan Max",
+   "status": "已实测"
+  },
+  {
+   "model": "deepseek (dsh headless)",
+   "carrier": "dsh --profile headless",
+   "level": "L4",
+   "cost": "API 计费兜底",
+   "status": "已实测"
+  }
+ ],
+ "agents": [
+  {
+   "agent": "东的助理MBP128(33300105)",
+   "role": "唯一调度入口：接单/派工/验收/汇报",
+   "level": "FX-调度"
+  },
+  {
+   "agent": "女娲Nuwax(44)",
+   "role": "平台能力与资料查询(A2A)",
+   "level": "FX-查询"
+  },
+  {
+   "agent": "ego-browser",
+   "role": "网页浏览与线上验证(平台技能13558)",
+   "level": "FX-验证"
+  },
+  {
+   "agent": "DSH lead(本会话)",
+   "role": "接管协调：配置、验收、规则修订",
+   "level": "FX-协调"
+  },
+  {
+   "agent": "nuwax-crew",
+   "role": "路由器：brief→派工计划(本项目)",
+   "level": "FX-路由"
+  }
+ ],
+ "notes": [
+  "消耗策略：local(本机) -> subscription(订阅) -> api(计费)；claude-code 已配 glm-5.3 属订阅档",
+  "status 仅代表本机当前实测状态；配额受限=登录正常但 429，冷却到期自动恢复",
+  "免费档与 oauth 模型尚未逐个实测，用前先跑 crew verify 同款最小任务",
+  "模型级路由暂不进 router（执行器级已够用），此矩阵用于人工/调度入口挑选模型"
+ ]
+}

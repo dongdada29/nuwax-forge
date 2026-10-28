@@ -1,0 +1,26 @@
+{
+  "taskKey": "budget-guard-offline-fixture",
+  "mode": "model",
+  "budget": { "maxTokens": 10000, "maxWallSeconds": 30, "maxAttempts": 1 },
+  "budgetSpec": {
+    "schemaVersion": 1,
+    "id": "guard-wiring-no-model-fixture",
+    "mode": "model",
+    "model": { "name": "offline-fixture-no-model-called" },
+    "taskKind": "text-implementation",
+    "expectedCalls": 1,
+    "initialContextTokens": 512,
+    "perCallOutputTokens": 32,
+    "budgetTokens": 10000
+  },
+  "context": { "maxBytes": 65536, "maxTokens": 16000, "contextFiles": [] },
+  "assignments": [{
+    "executor": "node-offline-fixture",
+    "role": "guard-wiring-check",
+    "command": [
+      "node", "-e",
+      "require('node:fs').writeFileSync(process.argv[1], JSON.stringify({usageScope:'run-segment', inputSemantics:'includes-cache', calls:0, usage:{inputTokens:0, outputTokens:0}})); console.log('fixed fixture: 0 model calls; no GUI/CDP')",
+      "{stepArtifacts}/usage.json"
+    ]
+  }]
+}

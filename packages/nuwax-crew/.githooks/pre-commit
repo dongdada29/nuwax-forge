@@ -1,0 +1,22 @@
+#!/bin/bash
+# 提交前密钥拦截：命中真实密钥形态即阻断（test-only 等测试夹具放行）
+set -o pipefail
+PATTERNS=(
+  'sk-[A-Za-z0-9]{20,}'
+  'AKIA[0-9A-Z]{16}'
+  '-----BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY-----'
+  '(api[_-]?key|apikey)["'"'"' ]*[:=]["'"'"' ]?[A-Za-z0-9_-]{16,}'
+  '(secret|password|access[_-]?token)["'"'"' ]*[:=]["'"'"' ]?["'"'"'"][A-Za-z0-9._+-]{16,}["'"'"'"]'
+  'gh[pousr]_[A-Za-z0-9]{30,}'
+  'xox[baprs]-[A-Za-z0-9-]{10,}'
+)
+DIFF=$(git diff --cached --unified=0 | grep '^[+]' | grep -v '^[+][+][+]')
+[ -z "$DIFF" ] && exit 0
+HITS=$(echo "$DIFF" | grep -inE "$(IFS='|'; echo "${PATTERNS[*]}")" | grep -viE "test-only|example|占位|\{.*\}|xxx+|<[^>]+>" | head -5)
+if [ -n "$HITS" ]; then
+  echo "⛔ 提交被拦截：检测到疑似密钥/凭据" >&2
+  echo "$HITS" | sed 's/\(.\{160\}\).*/\1…/' >&2
+  echo "如确为误报：git commit --no-verify（请在提交说明中写明理由）" >&2
+  exit 1
+fi
+exit 0

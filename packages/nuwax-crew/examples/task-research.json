@@ -1,0 +1,7 @@
+{
+  "taskKey": "research-nw124-related",
+  "kind": "research",
+  "risk": "low",
+  "objective": "调研业内 IM 产品验证码登录的倒计时反馈最佳实践，给 NW-124 复验提供对照",
+  "acceptance": ["给出3条可对照的实践"]
+}

@@ -1,0 +1,7 @@
+{
+  "taskKey": "nw124-web-reverify",
+  "kind": "web-verification",
+  "risk": "normal",
+  "objective": "用 ego-browser 复验 NW-124 在生产登录流程的倒计时反馈",
+  "acceptance": ["截图/快照证据"]
+}

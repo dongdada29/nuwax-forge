@@ -1,0 +1,100 @@
+{
+  "project": "nuwax-devkit",
+  "repo": "/Users/apple/workspace/nuwax-devkit",
+  "date": "2026-10-27",
+  "round": 4,
+  "status": "已交付，待 Codex 独立终验；退出 0 只表示交付完成，不是验收结论",
+  "environment": {
+    "node": "v24.18.0", "python": "3.15.0", "git": "2.54.0", "npm": "10.9.2",
+    "modelScope": "默认 install/test/pack/verify 无模型/GUI/登录/发布；本次实现本身由 Claude Code 真实调用模型（一次性研发，与固定验收段 0 内部模型分开）：首轮 955.454s / num_turns=91；第一次返修 751.224s / num_turns=62。num_turns 是原始 CLI 字段，不等同去重模型响应或供应商请求总量（Codex 观察首轮 49 个不同 assistant message id；供应商内部重试未知）；不估算成本"
+  },
+  "round4Gap": {
+    "record": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-independent-185022/review.json（总状态 false 因本缺陷，保留未改）",
+    "defect": "evaluateProduct({fixture: null/空对象/空 scripts, expectations:{requireKnownModelUsage:true}}) 在 parsed.modelObservation.known 抛 TypeError：parseFixture 早退缺 modelObservation，旧 null 反例未开严格计量，缺组合覆盖",
+    "fix": "parseFixture 全部早退统一携带 tasks:[] 与 NO_OBSERVATION 默认形状（known=false+reason，note 明确 0 指无效输入中未观察到）；evaluateProduct 字符串/超限/expectations 早退带 summary.modelObservation，主路径 ?? NO_OBSERVATION 兜底；计量要求与正向断言未删减",
+    "tests": "矩阵反例 6 类无效 fixture × 严格/非严格 = 12 组合全部结构化 passed:false 不抛；完整正确 fixture 两模式通过对照（passed:true、known:true、uniqueCalls=1）"
+  },
+  "finalReviewGap": {
+    "record": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-independent-184625/review.json（总状态 false 因本缺陷，保留未改）",
+    "defect": "init --recipe 经父目录 symlink（指向项目外）逃逸：旧校验只 lstat 最终文件，exit 0 且写入 .sdlc.json/runner",
+    "fix": "packages/cli/lib/recipe.mjs 以 realpathNearestExisting 比对配方完整 realpath 与规范化项目根（isInside），init/verify 共用；最终文件 symlink 拒绝不变",
+    "negativeTest": "review-fixes.test.mjs：真实临时 fixture 父目录 alias → 非 0、既有 .sdlc.json 字节不变、不生成 runner"
+  },
+  "reviewFeedback": {
+    "source": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/MONOREPO-REVIEW-FEEDBACK.md（13 项）",
+    "results": {
+      "1": "已修：无效输入（null/错类型/非字符串标题/损坏嵌套）结构化失败不抛出；测试 gui-negative.test.mjs",
+      "2": "已修：仅支持 Boolean/Assert，Query 明确拒绝；期望配置缺 subType/expectOutput 判无效",
+      "3": "已修：Boolean/StatementIsTruthy 交叉值冲突失败；身份内 type/subType 变化失败",
+      "4": "已修：usage 缺字段/负数/非整数/retry>0/孤儿副本判不完整；known=false 保留原始观察下界不伪记 0；known=true 注明非网络硬计量；去重保留",
+      "5": "已修：同 taskId 跨 group/execution 歧义拒绝，需具名身份；groupId 缺失不能通过；文档明确仅合成 fixture 判定",
+      "6": "已修：一次性导入（非空目标拒绝）+ 只读 --check；.env/.env.* 全排除（放行 .env.example）；源 symlink 跳过并记录；packfiles 由 tar -tvf 再查",
+      "7": "第一轮后段已修（'task-key' 解构），本轮以集成测试复证实证",
+      "8": "已修：resolveStateReal 逐组件 realpath（悬空/仓内/devkit 别名均结构化拒绝），先于 mkdir；真实 symlink 反例 + 无副作用断言",
+      "9": "已修：init 写入前验证 JSON/最小结构/symlink/越界；失败零副作用（.sdlc.json、scripts/ 不变）",
+      "10": "已修：实际探测 --node/--python 版本（Node>=22/Python>=3.10），失败先于 state 创建；python 为 PATH 命令或绝对路径，不从 cwd 解析；真实假解释器反例",
+      "11": "已修：tar -tvf 拒绝一切符号链接；registry 正则匹配 mbp128.json；out canonical 仓外；npm pack --ignore-scripts --offline；本轮产物隔离（mtime+预存同名即失败，实测拦下脏目录）",
+      "12": "已修：CLI 从 contracts level 注册取已实现集合（仅 source-tooling），GUI/未知 level 在创建 state 前拒绝并说明原因；kit/stack 通用性不动；反例断言 state 未创建",
+      "13": "已修：tokens 7310/7297（每 call 约 3.6k、每报告 2 calls）；'本次未发布'措辞；计数同步 154；新增全局待验指标章节"
+    }
+  },
+  "testCounts": {
+    "nuwax-stack": { "total": 55, "passed": 55, "failed": 0 },
+    "nuwax-crew": { "total": 47, "passed": 47, "failed": 0 },
+    "nuwa-sdlc-kit": { "total": 19, "passed": 19, "failed": 0 },
+    "contracts": { "total": 18, "passed": 18, "failed": 0, "note": "原 10 + 复审反例 6 + 终验矩阵反例与通过对照 2" },
+    "cli": { "total": 18, "passed": 18, "failed": 0, "note": "原 12 + 复审反例 5 + 终验反例 1（父目录 symlink 逃逸）" },
+    "workspaceTotal": 157
+  },
+  "verificationRun": {
+    "logs": "/Users/apple/Documents/Codex/2026-10-27/client-efficiency-pilot/evidence/monorepo-author-review/",
+    "files": ["npm-install.log", "npm-test.log", "contracts-check.log", "pack.log", "consumer-smoke.log", "cli-tests-r3-parent-symlink-fix.log", "npm-test-r3.log", "pack-r3.log", "consumer-smoke-r3.log", "contracts-tests-r4.log", "npm-test-r4.log", "pack-r4.log", "consumer-smoke-r4.log"],
+    "round4Results": {
+      "contracts suite": "exit 0，18/18（含矩阵反例与通过对照）",
+      "npm test": "exit 0，157/157",
+      "npm run pack -- --out /tmp/nuwax-devkit-tarballs-r4": "exit 0，5 tarball 核对通过（干净目录）",
+      "node scripts/consumer-smoke.mjs --tarballs /tmp/nuwax-devkit-tarballs-r4": "exit 0，全新 tmp 离线装 5 tgz，help/doctor/fixture init+verify 通过"
+    },
+    "round3Results": {
+      "cli suite": "exit 0，18/18（含新增父目录 symlink 逃逸反例）",
+      "npm test": "exit 0，155/155",
+      "npm run pack -- --out /tmp/nuwax-devkit-tarballs-r3": "exit 0，5 tarball 核对通过",
+      "node scripts/consumer-smoke.mjs --tarballs /tmp/nuwax-devkit-tarballs-r3": "exit 0，全新 tmp 离线装 5 tgz，help/doctor/fixture init+verify 通过"
+    },
+    "results": {
+      "npm install --ignore-scripts --offline": "exit 0（up to date）",
+      "npm test": "exit 0，155/155（r3 最新）",
+      "npm run contracts:check": "exit 0，字节一致 aaebb78c7d5e",
+      "python3 -I scripts/import_from_pilot.py --check": "exit 1（按设计）：kit package.json 版本字段 1 处预期漂移 + 新增 package.json 列为 NEW"
+    }
+  },
+  "tarballs": {
+    "out": "/tmp/nuwax-devkit-tarballs-r4",
+    "note": "r4 仅 contracts 变化；r3/r2 的 contracts tgz（103853c8fa50）与 r2 的 cli tgz（5782b81cfa0e）均已过时",
+    "files": [
+      "nuwax-ai-devkit-cli-0.1.0-devkit-local.1.tgz (9.9 KiB, entries=12, sha256=a5c3b71928b5…)",
+      "nuwax-ai-devkit-contracts-0.1.0-devkit-local.1.tgz (9.0 KiB, entries=7, sha256=0e8af7fd931c…)",
+      "nuwax-ai-devkit-crew-0.1.0-devkit-local.1.tgz (30.2 KiB, entries=28, sha256=94ad0fc010d2…)",
+      "nuwax-ai-devkit-stack-0.1.0-devkit-local.1.tgz (64.7 KiB, entries=44, sha256=027719c323bb…)",
+      "nuwax-ai-nuwa-sdlc-kit-1.5.0-devkit-local.1.tgz (38.8 KiB, entries=35, sha256=10983615d9c5…)"
+    ],
+    "contentChecks": "tar -tvf：无 registries/mbp*、无 .git、无 .env、无 node_modules、无任何符号链接（含相对目标）"
+  },
+  "modificationScope": {
+    "sourceCodeChanges": "stack/crew 源码零改动；kit 仍仅 package.json version 字段（第一轮所为，本轮未再动源）",
+    "round2Added": [
+      "packages/contracts/gui/midscene-report.mjs 重构 + test/gui-negative.test.mjs",
+      "packages/cli lib/recipe.mjs、lib/env.mjs、lib/paths.mjs（resolveStateReal）+ verify/init/doctor 校验顺序重排 + test/review-fixes.test.mjs",
+      "scripts/import_from_pilot.py 一次性导入+--check；scripts/pack.mjs tar -tvf/正则/canonical/隔离",
+      "docs CAPABILITIES/DSH/MIGRATION 第 13 项修正"
+    ]
+  },
+  "notClaimed": [
+    "未生产安装、未发布、未推送；git init 无 commit/remote",
+    "GUI live driver 未实现无 live 命令；GUI level 被统一 CLI 拒绝；fixture 校验器不替代真实 target/login 验证",
+    "maxModelRequests 仅观测；usage 计量只保留观察下界",
+    "client 全量非全绿；打包/设备/GUI 未验；构建提速未证明；远程 CI 未运行",
+    "全局指标待验：上下文 fresh/输入 token 下降、外部执行器兼容与跨机、真实构建缓存对比",
+    "源三仓无 LICENSE：新包 UNLICENSED，不虚构"
+  ]
+}

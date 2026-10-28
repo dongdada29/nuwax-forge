@@ -1,0 +1,43 @@
+name: npm-publish
+on:
+  push:
+    tags: ['v*']
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+      - run: npm test
+      - name: 检查版本是否已发布（本地直发过的版本跳过 publish，只跑冒烟）
+        id: published
+        run: |
+          V=$(node -p "require('./package.json').version")
+          if npm view "@nuwax-ai/nuwa-sdlc-kit@${V}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.published.outputs.exists == 'false'
+        # 不带 --provenance：sigstore 溯源要求 public 源仓库，本仓私有永远 E422（若转 public 可加回）
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: npx 冒烟
+        run: |
+          mkdir /tmp/smoke
+          cd /tmp/smoke
+          ok=0
+          for i in 1 2 3 4 5; do
+            if npx --yes --package @nuwax-ai/nuwax-sdlc-kit@latest nuwa-sdlc-kit init --dir . --name smoke; then ok=1; break; fi
+            echo "retry $i/5: registry propagation delay after npm publish, wait 10s"
+            sleep 10
+          done
+          [ "$ok" = 1 ] || exit 1
+          npx --yes --package @nuwax-ai/nuwax-sdlc-kit@latest nuwa-sdlc-kit check --dir .

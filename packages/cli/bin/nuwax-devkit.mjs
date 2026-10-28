@@ -1,0 +1,56 @@
+#!/usr/bin/env node
+// nuwax-devkit CLI —— 零外部依赖 Node ESM。定位安装后的同级包（require.resolve），
+// 不硬编码试点目录或源码绝对路径；子进程一律 argv 数组，不经 shell 拼接。
+import { runHelp } from '../lib/help.mjs';
+import { runDoctor } from '../lib/doctor.mjs';
+import { runInit } from '../lib/init.mjs';
+import { runVerify } from '../lib/verify.mjs';
+import { runClientVerify } from '../lib/client-verify.mjs';
+import { runGui } from '../lib/gui.mjs';
+import { runBudget } from '../lib/budget/cli.mjs';
+import { runPlan } from '../lib/run.mjs';
+import { parseArgs, UsageError, USAGE } from '../lib/args.mjs';
+
+const COMMANDS = {
+  help: { run: runHelp },
+  doctor: { flags: { json: 'boolean' }, run: opts => runDoctor(opts) },
+  init: { flags: { project: 'value', recipe: 'value' }, run: opts => runInit(opts) },
+  verify: {
+    flags: { project: 'value', state: 'value', 'task-key': 'value', node: 'value', python: 'value', reuse: 'boolean' },
+    run: opts => runVerify(opts),
+  },
+  'client-verify': {
+    flags: { project: 'value', state: 'value', node: 'value', python: 'value' },
+    run: opts => runClientVerify(opts),
+  },
+  gui: {
+    subcommands: ['run'],
+    flags: {
+      recipe: 'value', state: 'value', sdk: 'value', runtime: 'value',
+      cdp: 'value', 'launch-config': 'value', json: 'boolean', 'max-wall-seconds': 'value',
+      'budget-spec': 'value', 'budget-history': 'value',
+    },
+    run: async opts => { if (opts.subcommand !== 'run') throw new UsageError('gui 需要子命令 run（当前仅 gui run，显式 live）'); await runGui(opts); },
+  },
+  budget: {
+    subcommands: ['estimate', 'reconcile'],
+    flags: { spec: 'value', history: 'value', out: 'value', json: 'boolean', estimate: 'value', actual: 'value' },
+    run: opts => runBudget(opts),
+  },
+  run: {
+    flags: { plan: 'value', project: 'value', state: 'value', 'brief-file': 'value', python: 'value', timeout: 'value' },
+    run: opts => runPlan(opts),
+  },
+};
+
+try {
+  const [cmd, options] = parseArgs(process.argv.slice(2), COMMANDS);
+  await COMMANDS[cmd].run(options);
+} catch (error) {
+  if (error instanceof UsageError) {
+    process.stderr.write(`参数错误：${error.message}\n\n${USAGE}\n`);
+    process.exit(2);
+  }
+  process.stderr.write(`错误：${error.message}\n`);
+  process.exit(1);
+}

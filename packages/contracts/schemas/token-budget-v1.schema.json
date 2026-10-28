@@ -1,0 +1,310 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nuwax.dev/schemas/token-budget-v1.json",
+  "title": "nuwax-devkit token-budget v1（独立新增；不改动既有正本）",
+  "description": "budget estimate 的 spec 输入、估算输出、reconcile 输出与脱敏校准样本的结构契约。unknown 一律显式 status，不冒充数值。",
+  "definitions": {
+    "tokenRange": {
+      "type": "object",
+      "required": ["low", "median", "high"],
+      "properties": {
+        "low": { "type": "number", "minimum": 0 },
+        "median": { "type": "number", "minimum": 0 },
+        "high": { "type": "number", "minimum": 0 }
+      }
+    },
+    "unknownDim": {
+      "type": "object",
+      "required": ["status"],
+      "properties": { "status": { "const": "unknown" }, "reason": { "type": "string" } }
+    },
+    "inputSemantics": { "enum": ["includes-cache", "excludes-cache", "unknown"] }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/estimateSpec" },
+    { "$ref": "#/definitions/estimateResult" },
+    { "$ref": "#/definitions/reconcileResult" },
+    { "$ref": "#/definitions/calibrationSample" }
+  ],
+  "definitions": {
+    "estimateSpec": {
+      "type": "object",
+      "required": ["schemaVersion", "id", "taskKind", "mode", "expectedCalls"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "type": "string", "minLength": 1 },
+        "taskKind": { "type": "string", "minLength": 1 },
+        "scenario": { "type": ["string", "null"] },
+        "mode": { "enum": ["model", "no-model"] },
+        "model": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string", "minLength": 1 } } },
+        "expectedCalls": { "type": "integer", "minimum": 0 },
+        "initialContextTokens": { "type": "number", "minimum": 0 },
+        "inputs": { "type": "array", "items": { "type": "string" } },
+        "perCallOutputTokens": { "type": "number", "minimum": 0 },
+        "perCallToolResultTokens": { "type": "number", "minimum": 0 },
+        "cacheHitRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "imageTokensPerCall": {
+          "oneOf": [
+            { "type": "number", "minimum": 0 },
+            { "type": "array", "items": { "type": "number", "minimum": 0 }, "minItems": 2, "maxItems": 2 },
+            { "const": "unknown" }
+          ]
+        },
+        "imageTokensIncludedInContext": { "type": "boolean" },
+        "budgetTokens": { "type": "number", "minimum": 0 },
+        "modelProfiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "capabilities": {
+                "type": "object",
+                "properties": { "text": { "type": "boolean" }, "vision": { "type": "boolean" } }
+              },
+              "remainingQuotaTokens": { "type": ["number", "null"], "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "estimateResult": {
+      "type": "object",
+      "required": ["ok", "kind", "schemaVersion", "engine", "spec", "assumptions", "unknowns", "tokens", "totalTokens", "confidence", "budget", "recommendations", "scope"],
+      "properties": {
+        "ok": { "const": true },
+        "kind": { "const": "token-budget-estimate" },
+        "schemaVersion": { "const": 1 },
+        "engine": { "type": "object", "required": ["offline", "modelCallsUsed"], "properties": { "offline": { "const": true }, "modelCallsUsed": { "const": 0 } } },
+        "spec": { "type": "object" },
+        "runSegment": { "type": "object", "required": ["modelCalls", "tokens"], "properties": { "modelCalls": { "const": 0 }, "tokens": { "const": 0 } } },
+        "calls": { "type": "object", "required": ["expected"], "properties": { "expected": { "type": "integer", "minimum": 0 } } },
+        "baselineTokens": {
+          "type": "object",
+          "description": "未校准 raw 基准（校准比率的分母）；同 spec 重算即得，绝不随校准变化",
+          "required": ["inputTokens", "totalTokens"],
+          "properties": {
+            "inputTokens": { "$ref": "#/definitions/tokenRange" },
+            "outputTokens": { "oneOf": [{ "$ref": "#/definitions/tokenRange" }, { "type": "object", "required": ["status"], "properties": { "status": { "const": "unknown" } } }] },
+            "totalTokens": { "$ref": "#/definitions/tokenRange" },
+            "note": { "type": "string" }
+          }
+        },
+        "calibration": {
+          "type": "object",
+          "description": "校准元数据：appliedFactors 可用于把旧估算文件还原为 baseline（median ÷ factor）",
+          "required": ["ratioBasis", "appliedFactors", "samplesUsed"],
+          "properties": {
+            "ratioBasis": { "const": "baselineExpected" },
+            "appliedFactors": {
+              "type": "object",
+              "properties": {
+                "inputTokens": { "type": ["number", "null"], "minimum": 0 },
+                "outputTokens": { "type": ["number", "null"], "minimum": 0 }
+              }
+            },
+            "samplesUsed": { "type": "integer", "minimum": 0 },
+            "legacySamplesWithoutBaseline": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "assumptions": { "type": "array", "items": { "type": "object" } },
+        "unknowns": { "type": "array", "items": { "type": "string" } },
+        "tokens": {
+          "type": "object",
+          "required": ["inputTokens", "cachedReadTokens", "outputTokens"],
+          "properties": {
+            "initialContextTokens": { "$ref": "#/definitions/tokenRange" },
+            "inputTokens": { "allOf": [{ "$ref": "#/definitions/tokenRange" }], "properties": { "excludesUnknownImage": { "type": "boolean" }, "note": { "type": "string" } } },
+            "cachedReadTokens": { "$ref": "#/definitions/tokenRange" },
+            "cacheWriteTokens": { "type": "object", "required": ["status"], "properties": { "status": { "const": "not-modeled" } } },
+            "outputTokens": { "$ref": "#/definitions/tokenRange" },
+            "toolResultTokens": { "$ref": "#/definitions/tokenRange" },
+            "imageTokens": { "oneOf": [{ "$ref": "#/definitions/unknownDim" }, { "type": "object" } ] }
+          }
+        },
+        "totalTokens": {
+          "oneOf": [
+            { "$ref": "#/definitions/tokenRange" },
+            {
+              "type": "object",
+              "required": ["status", "subtotal", "unknownDimensions"],
+              "properties": {
+                "status": { "const": "partial-unknown" },
+                "subtotal": { "$ref": "#/definitions/tokenRange" },
+                "unknownDimensions": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+              }
+            }
+          ]
+        },
+        "confidence": {
+          "type": "object",
+          "required": ["level", "reasons", "history"],
+          "properties": {
+            "level": { "enum": ["low", "medium", "high"] },
+            "reasons": { "type": "array", "items": { "type": "string" } },
+            "history": { "type": "object", "required": ["samples"], "properties": { "samples": { "type": "integer", "minimum": 0 } } }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "required": ["verdict"],
+          "properties": {
+            "verdict": { "enum": ["within", "exceeds", "uncertain", "unknown", "not-set"] },
+            "budgetTokens": { "type": "number", "minimum": 0 },
+            "headroomTokens": { "type": "number" },
+            "overByTokens": { "type": "number" },
+            "note": { "type": "string" }
+          }
+        },
+        "dominantDimensions": { "type": "array", "items": { "type": "object" } },
+        "recommendations": { "type": "array", "items": { "type": "object", "required": ["id", "reason", "suggestion"] } },
+        "modelProfiles": { "type": "object" },
+        "historyDiagnostics": { "type": "array", "items": { "type": "object", "required": ["line", "problem"] } },
+        "formula": { "type": "object" },
+        "scope": { "type": "string" }
+      }
+    },
+    "reconcileResult": {
+      "type": "object",
+      "required": ["ok", "kind", "schemaVersion", "engine", "estimate", "actual", "comparison", "budget", "recommendations"],
+      "properties": {
+        "ok": { "const": true },
+        "kind": { "const": "token-budget-reconcile" },
+        "schemaVersion": { "const": 1 },
+        "engine": { "type": "object", "required": ["offline", "modelCallsUsed"], "properties": { "offline": { "const": true }, "modelCallsUsed": { "const": 0 } } },
+        "estimate": { "type": "object" },
+        "actual": {
+          "type": "object",
+          "required": ["format", "inputSemantics", "completeness", "usage"],
+          "properties": {
+            "format": { "enum": ["gui-manifest", "claude-result", "usage-json"] },
+            "inputSemantics": { "$ref": "#/definitions/inputSemantics" },
+            "completeness": {
+              "type": "object",
+              "required": ["known", "retryObserved", "complete"],
+              "properties": { "known": { "type": "boolean" }, "retryObserved": { "type": "boolean" }, "complete": { "type": "boolean" } }
+            },
+            "notes": { "type": "array", "items": { "type": "string" } },
+            "usage": {
+              "type": "object",
+              "properties": {
+                "calls": { "type": ["integer", "null"], "minimum": 0 },
+                "inputTokens": { "type": ["number", "null"], "minimum": 0 },
+                "outputTokens": { "type": ["number", "null"], "minimum": 0 },
+                "totalTokens": { "type": ["number", "null"], "minimum": 0 },
+                "cachedReadTokens": { "type": ["number", "null"], "minimum": 0 },
+                "cacheWriteTokens": { "type": ["number", "null"], "minimum": 0 },
+                "comparableInputIncludingCachedRead": { "type": ["number", "null"], "minimum": 0 }
+              }
+            },
+            "rawObserved": {}
+          }
+        },
+        "comparison": {
+          "type": "object",
+          "required": ["dimensions", "notes"],
+          "properties": {
+            "dimensions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["dimension", "estimateMedian", "actual", "delta", "ratio"],
+                "properties": {
+                  "dimension": { "type": "string" },
+                  "estimateMedian": { "type": ["number", "null"] },
+                  "actual": { "type": ["number", "null"] },
+                  "delta": { "type": ["number", "null"] },
+                  "ratio": { "type": ["number", "null"] },
+                  "semanticsOk": { "type": "boolean" },
+                  "note": { "type": "string" }
+                }
+              }
+            },
+            "notes": { "type": "array", "items": { "type": "string" } },
+            "percentError": { "type": ["object", "null"] }
+          }
+        },
+        "budget": { "type": "object", "required": ["verdict"] },
+        "recommendations": { "type": "array", "items": { "type": "object" } },
+        "historyWrite": {
+          "type": "object",
+          "properties": {
+            "appended": { "type": "boolean" },
+            "duplicateSkipped": { "type": "boolean" },
+            "totalSamples": { "type": "integer", "minimum": 0 },
+            "diagnostics": { "type": "array" },
+            "reason": { "type": "string" }
+          }
+        },
+        "sample": { "$ref": "#/definitions/calibrationSample" }
+      }
+    },
+    "calibrationSample": {
+      "type": "object",
+      "required": ["kind", "schemaVersion", "model", "taskKind", "recordedAt", "expected", "actual"],
+      "properties": {
+        "kind": { "const": "token-budget-calibration" },
+        "schemaVersion": { "const": 1 },
+        "sampleVersion": { "const": 2, "description": "v2：含 baselineExpected（比率分母）；v1 旧样本缺此字段，不参与校准" },
+        "estimateId": { "type": ["string", "null"] },
+        "model": { "type": ["string", "null"] },
+        "taskKind": { "type": ["string", "null"] },
+        "scenario": { "type": ["string", "null"] },
+        "inputSemantics": { "$ref": "#/definitions/inputSemantics" },
+        "recordedAt": { "type": "string" },
+        "sourceHash": { "type": ["string", "null"], "description": "actual 文件 sha256；仅 hash，不含内容" },
+        "baselineExpected": {
+          "type": "object",
+          "description": "未校准 raw 基准（下次校准比率的分母）；null=无法还原，明示不用 0 冒充",
+          "properties": {
+            "calls": { "type": ["integer", "null"] },
+            "inputTokens": { "type": ["number", "null"] },
+            "outputTokens": { "type": ["number", "null"] },
+            "cachedReadTokens": { "type": ["number", "null"] }
+          }
+        },
+        "baselineSource": {
+          "type": "object",
+          "description": "baseline 来源：baselineTokens | reconstructed-from-applied-factor | missing",
+          "properties": {
+            "inputTokens": { "enum": ["baselineTokens", "reconstructed-from-applied-factor", "missing"] },
+            "outputTokens": { "enum": ["baselineTokens", "reconstructed-from-applied-factor", "missing"] }
+          }
+        },
+        "predictedExpected": {
+          "type": "object",
+          "description": "本次真正预测（展示用；误差对它比较，不作为下次比率分母）",
+          "properties": {
+            "calls": { "type": ["integer", "null"] },
+            "inputTokens": { "type": ["number", "null"] },
+            "outputTokens": { "type": ["number", "null"] },
+            "cachedReadTokens": { "type": ["number", "null"] }
+          }
+        },
+        "expected": {
+          "type": "object",
+          "description": "v1 旧字段：保留可解析，但不参与 v2 校准",
+          "properties": {
+            "calls": { "type": ["integer", "null"] },
+            "inputTokens": { "type": ["number", "null"] },
+            "outputTokens": { "type": ["number", "null"] },
+            "cachedReadTokens": { "type": ["number", "null"] }
+          }
+        },
+        "actual": {
+          "type": "object",
+          "description": "脱敏：仅数字/ids/口径；禁止 prompt、截图、会话、凭据字段",
+          "properties": {
+            "calls": { "type": ["integer", "null"] },
+            "inputTokens": { "type": ["number", "null"] },
+            "outputTokens": { "type": ["number", "null"] },
+            "cachedReadTokens": { "type": ["number", "null"] },
+            "imageTokens": { "type": ["number", "null"] }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

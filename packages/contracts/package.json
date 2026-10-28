@@ -1,0 +1,23 @@
+{
+  "name": "@nuwax-ai/devkit-contracts",
+  "version": "0.1.0-devkit-local.1",
+  "private": true,
+  "description": "nuwax-devkit 共享契约：verification-v1 正本 schema、level 边界、task/runtime 已实现字段声明、GUI driver 合成 fixture 校验器",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "README.md",
+    "schemas/",
+    "gui/",
+    "docs/",
+    "scripts/"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "sync": "node scripts/sync-schema.mjs",
+    "check": "node scripts/sync-schema.mjs --check"
+  }
+}
