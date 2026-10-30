@@ -48,3 +48,6 @@ GUI 是显式可选入口，需已有 SDK、认证与授权 CDP；只支持本�
 提供受治理的真实有限执行入口。模型任务必须显式预算与上下文声明；GUI 使用 `--budget-spec`。
 启动前按预测 HIGH 拦截，串行步骤共享余额，实耗 unknown 阻断后续；同 taskKey 首版仅一次 attempt，不自动返修续跑。
 完整 plan、scope 与取消边界见随包 `lib/budget/README.md`。这不提供供应商内部流式硬 token 上限。
+
+`client-workflow [run|seal] --spec /absolute/spec.json --state /absolute/fresh-state`
+提供可安装的固定 client source-tooling 流程，默认 direct（0 模型请求）；显式 compare 才允许 fresh Codex 执行器和唯一模型基准。spec 必须显式声明解释器、Codex/session/host 标识及完整预算。seal 按指定 task_complete 手动幂等封账；pending/unknown 不写 final。详细配置、网络与验收边界见仓库 `docs/CLIENT-WORKFLOW.md`。

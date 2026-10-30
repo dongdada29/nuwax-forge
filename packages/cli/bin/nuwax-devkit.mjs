@@ -5,6 +5,7 @@ import { runHelp } from '../lib/help.mjs';
 import { runDoctor } from '../lib/doctor.mjs';
 import { runInit } from '../lib/init.mjs';
 import { runVerify } from '../lib/verify.mjs';
+import { runClientWorkflow } from '../lib/client-workflow.mjs';
 import { runClientVerify } from '../lib/client-verify.mjs';
 import { runGui } from '../lib/gui.mjs';
 import { runBudget } from '../lib/budget/cli.mjs';
@@ -23,6 +24,7 @@ const COMMANDS = {
     flags: { project: 'value', state: 'value', node: 'value', python: 'value' },
     run: opts => runClientVerify(opts),
   },
+  'client-workflow': { subcommands: ['run', 'seal'], flags: { spec: 'value', state: 'value' }, run: runClientWorkflow },
   gui: {
     subcommands: ['run'],
     flags: {

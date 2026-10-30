@@ -7,6 +7,7 @@ export const USAGE = `用法：
   nuwax-devkit init --project <外部项目目录> --recipe <仓内相对配方路径>
   nuwax-devkit verify --project <外部项目目录> --state <仓外状态目录> --task-key <任务键>
                       [--node <可信node绝对路径>] [--python <python解释器>] [--reuse]
+  nuwax-devkit client-workflow [run|seal] --spec <JSON> --state <fresh仓外目录>
   nuwax-devkit client-verify --project <client目录> --state <仓外状态目录>
                               [--node <可信node绝对路径>] [--python <python解释器>]
   nuwax-devkit run --plan <plan JSON> --project <工作目录> --state <仓外状态目录>
