@@ -55,3 +55,7 @@ GUI 是显式可选入口，需已有 SDK、认证与授权 CDP；只支持本�
 ## 独立客户端 Agent（Codex / DeepSeek Harness）
 
 `nuwax-devkit agent doctor|prepare|run|reconcile` 提供两个真实的一次性 headless 适配器，复用现有 `budget/execution.mjs`。默认安装、测试、doctor 和 prepare 均不调用模型；只有显式 `agent run` 会派发付费模型任务。使用步骤、完整 spec、权限和用量边界见 [CLIENT-AGENTS.md](../../docs/CLIENT-AGENTS.md)。`completed` 表示本次执行完成且 token 结算通过，产品验收始终单列 `acceptancePassed:null`。
+
+## 离线统一安装与薄 Skill
+
+在源码仓运行 `node scripts/build-bundle.mjs --out <新的仓外绝对目录>`，将整个目录分发后使用 `node <bundle>/install.mjs install --host codex|deepseek-harness|nuwax`。可显式指定 `--root`、Codex/DSH 的 `--host-root` 或 Nuwax 的 `--workspace`。完整路径、发现机制、升级/rollback/uninstall 与保留备份规则见分发包 `docs/INSTALLATION.md`（源码为 `docs/INSTALLATION.md`）。安装只做本地 doctor，不运行模型，不发布平台技能。
