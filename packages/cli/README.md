@@ -51,3 +51,7 @@ GUI 是显式可选入口，需已有 SDK、认证与授权 CDP；只支持本�
 
 `client-workflow [run|seal] --spec /absolute/spec.json --state /absolute/fresh-state`
 提供可安装的固定 client source-tooling 流程，默认 direct（0 模型请求）；显式 compare 才允许 fresh Codex 执行器和唯一模型基准。spec 必须显式声明解释器、Codex/session/host 标识及完整预算。seal 按指定 task_complete 手动幂等封账；pending/unknown 不写 final。详细配置、网络与验收边界见仓库 `docs/CLIENT-WORKFLOW.md`。
+
+## 独立客户端 Agent（Codex / DeepSeek Harness）
+
+`nuwax-devkit agent doctor|prepare|run|reconcile` 提供两个真实的一次性 headless 适配器，复用现有 `budget/execution.mjs`。默认安装、测试、doctor 和 prepare 均不调用模型；只有显式 `agent run` 会派发付费模型任务。使用步骤、完整 spec、权限和用量边界见 [CLIENT-AGENTS.md](../../docs/CLIENT-AGENTS.md)。`completed` 表示本次执行完成且 token 结算通过，产品验收始终单列 `acceptancePassed:null`。

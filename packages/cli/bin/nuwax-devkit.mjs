@@ -9,10 +9,13 @@ import { runClientWorkflow } from '../lib/client-workflow.mjs';
 import { runClientVerify } from '../lib/client-verify.mjs';
 import { runGui } from '../lib/gui.mjs';
 import { runBudget } from '../lib/budget/cli.mjs';
+import { runAgent } from '../lib/agent/index.mjs';
 import { runPlan } from '../lib/run.mjs';
 import { parseArgs, UsageError, USAGE } from '../lib/args.mjs';
 
 const COMMANDS = {
+  agent: { subcommands: ['doctor', 'prepare', 'run', 'reconcile'],
+    flags: { runtime: 'value', binary: 'value', spec: 'value', state: 'value', 'brief-file': 'value', json: 'boolean' }, run: runAgent },
   help: { run: runHelp },
   doctor: { flags: { json: 'boolean' }, run: opts => runDoctor(opts) },
   init: { flags: { project: 'value', recipe: 'value' }, run: opts => runInit(opts) },

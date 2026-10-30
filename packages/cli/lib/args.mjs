@@ -4,6 +4,9 @@ export class UsageError extends Error {}
 export const USAGE = `用法：
   nuwax-devkit help
   nuwax-devkit doctor [--json]
+  nuwax-devkit agent doctor --runtime <codex|deepseek-harness> [--binary <可信绝对路径>] --json
+  nuwax-devkit agent prepare --spec <agent JSON> --brief-file <短任务书> --state <新仓外目录>
+  nuwax-devkit agent [run|reconcile] --state <已准备仓外目录>
   nuwax-devkit init --project <外部项目目录> --recipe <仓内相对配方路径>
   nuwax-devkit verify --project <外部项目目录> --state <仓外状态目录> --task-key <任务键>
                       [--node <可信node绝对路径>] [--python <python解释器>] [--reuse]
