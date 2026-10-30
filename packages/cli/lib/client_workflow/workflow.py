@@ -13,7 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import time
-from bounded import SessionReader, JsonLines, MeasurementError, integer, supervise, stop_group
+from bounded import SessionReader, JsonLines, MeasurementError, integer, supervise, stop_group, termination_probe
 
 ZERO = dict(input_tokens=0, output_tokens=0, total_tokens=0, cached_input_tokens=0, reasoning_output_tokens=0)
 def require(ok, message):
@@ -38,6 +38,7 @@ def host(spec, final=False):
     after_marker_usage = False
     reply_seen = False
     reply_metered = False
+    current_turn = spec['hostTurn']
     for row in JsonLines(spec['hostSession']).rows(final=True):
         p = row.get('payload') or {}
         is_user = row.get('type') == 'response_item' and p.get('role') == 'user'
@@ -49,6 +50,9 @@ def host(spec, final=False):
                 base = last
                 start = row.get('timestamp')
                 active = True
+        if row.get('type') == 'turn_context':
+            current_turn = p.get('turn_id', current_turn)
+            if active and current_turn != spec['hostTurn']: break
         if row.get('type') == 'session_meta':
             require(p.get('id') == spec['hostThread'], 'host identity mismatch')
             reader.meta = True
@@ -72,7 +76,8 @@ def host(spec, final=False):
     require(active and base is not None and last is not None and after_marker_usage, 'host usage unknown')
     usage = {k: integer(last[k] - base[k]) for k in ZERO}
     require(usage['total_tokens'] == usage['input_tokens'] + usage['output_tokens'], 'host delta invalid')
-    return dict(usage=usage, start=start, end=end, complete=complete, tools=tools)
+    return dict(usage=usage, start=start, end=end, complete=complete and reply_seen and reply_metered, tools=tools,
+                status='complete' if complete and reply_seen and reply_metered else 'pending')
 
 class Workflow:
     def __init__(self, args):
@@ -94,7 +99,7 @@ class Workflow:
     def preflight(self, fresh=True):
         self.safe_paths()
         s = self.s
-        allowed = {'project','node','python','codex','codexHome','sessions','hostSession','hostThread','hostTurn','marker','budget','mode','executorModel','baselineModel','reasoning'}
+        allowed = {'project','node','python','codex','codexHome','sessions','hostSession','hostThread','hostTurn','marker','budget','mode','executorModel','baselineModel','reasoning','ownedActors','maxAttempts'}
         require(not set(s) - allowed, 'unknown spec fields')
         require(s.get('mode', 'direct') in ('direct','compare'), 'invalid mode')
         for k in ('project','node','python','codex','codexHome','sessions','hostSession'):
@@ -111,11 +116,13 @@ class Workflow:
         for p in (self.a.spec, s['hostSession'], s['node'], s['python'], s['codex']):
             require(not inside(self.state, Path(p).resolve()), 'state would cover an input')
         if fresh: require(not self.state.exists() and not Path(self.a.state).is_symlink(), 'fresh state required; evidence exists')
-        keys = {'totalTokens','dispatchStopTokens','hostReserveTokens','executorCapTokens','baselineCapTokens','launchReserveTokens','wallSeconds','processWallSeconds','startupGraceSeconds','hostToolRoundtrips'}
+        require(s.get('maxAttempts', 1) == 1, 'maxAttempts must equal 1')
+        keys = {'hostNextInputTokens','hostFinalReplyTokens','totalTokens','dispatchStopTokens','hostReserveTokens','executorCapTokens','baselineCapTokens','launchReserveTokens','wallSeconds','processWallSeconds','startupGraceSeconds','hostToolRoundtrips'}
         require(set(self.b) == keys, 'budget requires exact explicit fields')
         for k, v in self.b.items():
             if k.endswith('Seconds'): require(type(v) in (int,float) and math.isfinite(v) and v > 0, 'bad timing budget')
             else: integer(v)
+        require(self.b['hostNextInputTokens'] > 0 and self.b['hostFinalReplyTokens'] > 0, 'explicit positive host next-input/final reserve required')
         require(0 < self.b['dispatchStopTokens'] <= self.b['totalTokens'] - self.b['hostReserveTokens'], 'invalid dispatch/reserve')
         require(self.b['launchReserveTokens'] > 0 and self.b['executorCapTokens'] > 0 and self.b['baselineCapTokens'] > 0, 'positive process caps required')
         require(self.b['launchReserveTokens'] <= min(self.b['executorCapTokens'],self.b['baselineCapTokens']), 'launch reserve exceeds process cap')
@@ -134,39 +141,83 @@ class Workflow:
         h = host(self.s, final)
         parts = {'host': h['usage'], 'direct': ZERO}
         ids = {self.s['hostThread']}; paths = {str(Path(self.s['hostSession']).resolve())}
+        actors = {}
+        if self.s.get('mode') == 'compare':
+            actors = {arm: dict(capTokens=self.b[key]) for arm, key in
+                      (('executor','executorCapTokens'), ('baseline','baselineCapTokens'))}
+        for x in self.s.get('ownedActors', []):
+            require(isinstance(x, dict) and set(x) <= {'name','session','thread','capTokens'}, 'bad owned actor descriptor')
+            name = x.get('name')
+            require(isinstance(name, str) and name not in actors and name not in parts, 'duplicate actor name')
+            require({'session','thread','capTokens'} <= set(x), 'incomplete actor descriptor')
+            actors[name] = dict(x)
         if self.owned.exists():
             for p in sorted(self.owned.glob('*.json')):
-                x = load(p); path = str(Path(x['session']).resolve())
-                require(x['thread'] not in ids and path not in paths, 'duplicate owned session')
-                ids.add(x['thread']); paths.add(path)
-                # Filter child telemetry at host completion, including its final reply.
-                reader = SessionReader(path, x['thread'])
+                x = load(p)
+                require(p.stem not in parts, 'reserved actor name')
+                if p.stem in actors:
+                    require(not actors[p.stem].get('session'), 'duplicate actor descriptor')
+                    actors[p.stem].update(x)
+                else:
+                    actors[p.stem] = x
+        ledger = {}; all_settled = True
+        for name, x in actors.items():
+            cap = integer(x.get('capTokens'))
+            require(cap > 0, 'positive actor cap required')
+            u = None; settled = False
+            path = x.get('session'); thread = x.get('thread')
+            if path is not None:
+                require(isinstance(path, str) and Path(path).is_absolute() and isinstance(thread, str) and thread, 'invalid actor identity')
+                path = str(Path(path).resolve())
+                require(thread not in ids and path not in paths, 'duplicate owned session')
+                ids.add(thread); paths.add(path)
+                reader = SessionReader(path, thread)
                 rows = JsonLines(path).rows(final=True)
-                if h['complete']:
-                    require(all(r.get('timestamp') for r in rows),'owned timestamps unknown')
-                    rows = [r for r in rows if stamp(r['timestamp']) <= stamp(h['end'])]
-                bounded_rows=[]
+                bounded_rows = []; reply = metered = False
                 for row in rows:
+                    if h['complete']:
+                        require(row.get('timestamp'), 'owned timestamps unknown')
+                        if stamp(row['timestamp']) > stamp(h['end']): break
+                    p = row.get('payload') or {}
+                    if row.get('type') == 'response_item' and p.get('role') == 'user' and bounded_rows:
+                        # The initial user prompt is allowed; a later user cannot meter a prior final.
+                        if reply or any(r.get('type') == 'response_item' and r.get('payload',{}).get('role') == 'user' for r in bounded_rows): break
                     bounded_rows.append(row)
-                    if row.get('type')=='event_msg' and row.get('payload',{}).get('type')=='task_complete': break
-                rows=bounded_rows
-                reader.lines.rows = lambda final=False, rows=rows: rows
-                u = reader.read(final=True); require(u is not None, 'owned usage unknown')
-                parts[p.stem] = u
+                    if row.get('type') == 'response_item' and p.get('role') == 'assistant' and p.get('phase') in ('final','final_answer'):
+                        reply = True; metered = False
+                    if reply and row.get('type') == 'event_msg' and p.get('type') == 'token_count' and p.get('info') is not None:
+                        metered = True
+                    if row.get('type') == 'event_msg' and p.get('type') == 'task_complete':
+                        settled = reply and metered
+                        break
+                reader.lines.rows = lambda final=False, rows=bounded_rows: rows
+                u = reader.read(final=True)
+            parts[name] = u
+            observed = u['total_tokens'] if u is not None else 0
+            require(observed <= cap, 'owned actor observation exceeds cap')
+            # Cap is the entire outstanding envelope, not cap plus observed usage.
+            held = 0 if settled else max(0, cap-observed)
+            ledger[name] = dict(observedTokens=observed, reservedTokens=held, capTokens=cap, settled=settled, measurement='known' if u is not None else 'unknown')
+            all_settled &= settled
         end = h['end'] if h['complete'] else dt.datetime.now(dt.timezone.utc).isoformat()
         wall = (stamp(end) - stamp(h['start'])).total_seconds()
         require(wall >= 0, 'negative wall')
-        total = sum(u['total_tokens'] for u in parts.values())
-        return dict(final=bool(final and h['complete']), status='complete' if h['complete'] else 'pending', observedTotalTokens=total,
+        total = sum(u['total_tokens'] for u in parts.values() if u is not None)
+        actor_reserve = sum(x['reservedTokens'] for x in ledger.values())
+        host_reserve = 0 if h['complete'] else self.b['hostNextInputTokens'] + self.b['hostFinalReplyTokens']
+        return dict(final=bool(final and h['complete'] and all_settled), status='complete' if h['complete'] and all_settled else 'pending', observedTotalTokens=total,
+                    reservedActorTokens=actor_reserve, reservedHostTokens=host_reserve, committedTokens=total+actor_reserve+host_reserve, actors=ledger,
                     withinBudget=total <= self.b['totalTokens'] and wall <= self.b['wallSeconds'], parts=parts, wallSeconds=wall,
                     hostComplete=h['end'], hostToolRoundtrips=h['tools'], budget=self.b,
-                    limits='Observed input+output only; cache/reasoning subsets counted once. Unflushed/provider usage unknown. Cannot interrupt host; tool roundtrips are phase gates.')
+                    taskIdentity=dict(hostThread=self.s['hostThread'],hostTurn=self.s['hostTurn'],marker=self.s['marker']),
+                    limits='Observed input+output plus outstanding actor caps and next complete host input/final reply reserves. In-flight/provider usage unknown; cannot interrupt the current native host API request; refuse only the next controllable dispatch.')
     def gate(self, launch=False):
         t = self.totals()
         reserve = self.b['launchReserveTokens'] if launch else 0
-        require(t['observedTotalTokens'] + reserve < self.b['dispatchStopTokens'], 'aggregate dispatch stop')
+        require(t['observedTotalTokens'] + t['reservedActorTokens'] + reserve < self.b['dispatchStopTokens'], 'aggregate dispatch stop including owned caps')
+        require(t['committedTokens'] + reserve <= self.b['totalTokens'], 'aggregate host next-input/final reserve exhausted')
         require(t['wallSeconds'] < self.b['wallSeconds'], 'aggregate wall stop')
-        require(t['hostToolRoundtrips'] <= self.b['hostToolRoundtrips'], 'host tool phase stop')
+        require(t['hostToolRoundtrips'] < self.b['hostToolRoundtrips'], 'host tool dispatch-boundary stop')
         return t
     def command(self, arm):
         state = self.state / (arm + '-client-state')
@@ -194,6 +245,7 @@ class Workflow:
         self.gate()
         v=subprocess.run([self.s['python'],'-B',self.a.validator,'--manifest',str(f),'--repo',str(self.project),'--level','source-tooling','--node',self.s['node']],capture_output=True,text=True,timeout=min(20,self.b['processWallSeconds']),env=self.env)
         require(v.returncode==0, 'independent validator failed: '+v.stderr[-200:])
+        self.gate()
         return dict(passed=True,manifest=str(f),sha256=digest(f),counts=counts,sqlitePhase='done',owner=None,evidenceCount=4,validator=json.loads(v.stdout))
     def direct(self):
         self.gate(launch=True); start=time.monotonic()
@@ -208,18 +260,23 @@ class Workflow:
         native=json.loads((self.state/'direct.stdout').read_text().strip().splitlines()[-1]); require(native['passed'] is True and native['reused'] is False,'direct verdict failed')
         checks=self.checked('direct')
         return dict(checks=checks,usage=ZERO,modelRequests=0,doctor=native['doctor'],wallSeconds=time.monotonic()-start)
+    def probe_command(self):
+        # Node and its descendant both self-expire even when host signals get EPERM.
+        code = "const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','setTimeout(()=>process.exit(0),1200)'],{stdio:'ignore'});console.log('probe-ready');setTimeout(()=>process.exit(0),1500)"
+        cmd = self.command('probe')
+        return cmd[:cmd.index(self.s['node'])] + [self.s['node'], '-e', code]
     def model(self, arm, command):
         self.gate(launch=True)
         prompt='执行一次固定验证命令；只调用一次 shell 工具，不读历史、不改文件、不增加命令或模型。依据实际结果简短回复。命令：\n'+shlex.join(command)
         cap=self.b['executorCapTokens' if arm=='executor' else 'baselineCapTokens']
         def observe(r):
-            if r['session'] and r['usage'] is not None:
+            if r['session']:
                 p=self.owned/(arm+'.json')
-                if not p.exists(): save(p,dict(session=r['session'],thread=r['thread']))
+                if not p.exists(): save(p,dict(session=r['session'],thread=r['thread'],capTokens=cap))
             self.gate()
         cmd=[self.s['codex'],'-a','never','exec','--json','--sandbox','danger-full-access','-m',self.s['executorModel' if arm=='executor' else 'baselineModel'],'-c','model_reasoning_effort='+json.dumps(self.s.get('reasoning','medium')),'-C',str(self.project),prompt]
         old=os.environ.get('CODEX_HOME'); os.environ['CODEX_HOME']=self.s['codexHome']
-        try: r=supervise(cmd,evidence=self.state/(arm+'-supervision'),sessions=self.s['sessions'],budget=cap,launch_tokens=self.b['launchReserveTokens'],wall=self.b['processWallSeconds'],startup_grace=self.b['startupGraceSeconds'],observer=observe)
+        try: r=supervise(cmd,evidence=self.state/(arm+'-supervision'),sessions=self.s['sessions'],budget=cap,launch_tokens=self.b['launchReserveTokens'],wall=self.b['processWallSeconds'],startup_grace=self.b['startupGraceSeconds'],observer=observe,probe_command=self.probe_command())
         finally:
             if old is None: os.environ.pop('CODEX_HOME',None)
             else: os.environ['CODEX_HOME']=old
@@ -256,7 +313,10 @@ class Workflow:
         self.safe_paths()
         require(self.state.is_dir() and load(self.state/'spec.json')==self.s,'seal spec/state mismatch')
         target=self.state/'TOTAL-FINAL.json'
-        if target.exists(): return load(target)
+        if target.exists():
+            old=load(target)
+            require(old.get('taskIdentity')==dict(hostThread=self.s['hostThread'],hostTurn=self.s['hostTurn'],marker=self.s['marker']), 'sealed task identity mismatch')
+            return old
         try: t=self.totals(final=True)
         except (ValueError,OSError) as e: return dict(final=False,status='unknown',error=str(e))
         if not t['final']: return t
@@ -271,5 +331,11 @@ def main():
     try:
         w=Workflow(a); r=getattr(w,a.action)(); print(json.dumps(r or {'passed':True})); return 0 if r is None or r.get('passed',r.get('final',False)) else 1
     except (ValueError,OSError,KeyError,TypeError,subprocess.SubprocessError) as e:
+        if 'w' in locals() and w.state.is_dir():
+            failure=dict(passed=False,final=False,blocked=True,error=str(e))
+            if not (w.state/'failure.json').exists(): save(w.state/'failure.json',failure)
+            try:
+                if not (w.state/'TOTAL-SNAPSHOT.json').exists(): save(w.state/'TOTAL-SNAPSHOT.json',w.totals())
+            except (ValueError,OSError,KeyError,TypeError): pass
         print(json.dumps(dict(passed=False,final=False,error=str(e))));return 1
 if __name__=='__main__':raise SystemExit(main())
