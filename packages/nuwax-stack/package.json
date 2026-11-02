@@ -14,7 +14,8 @@
     "docs/",
     "tests/",
     "config/",
-    "scripts/"
+    "scripts/",
+    "modules/"
   ],
   "scripts": {
     "test": "python3 -B -m unittest discover -s tests -v"

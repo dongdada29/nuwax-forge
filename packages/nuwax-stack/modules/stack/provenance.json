@@ -1,0 +1,13 @@
+{
+  "source": "dongdada29/nuwax-stack",
+  "head": "bdf7210bbbd693e4510baf1a5e5801bf9f5cc447",
+  "skillVersion": "0.4.7",
+  "sourceDirty": false,
+  "note": "Vendored internal module; existing verification bridge retained. Source fields identify the clean upstream snapshot, not a byte-exact local copy.",
+  "localChanges": [
+    {
+      "path": "MODULE.md",
+      "summary": "Converted the upstream Skill entry into a Forge internal module index: removed Skill frontmatter, retained upstream version and operating constraints, and made Forge the sole Skill/CLI entry."
+    }
+  ]
+}

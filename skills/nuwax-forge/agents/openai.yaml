@@ -1,3 +1,3 @@
 interface:
-  display_name: "Nuwax Devkit"
+  display_name: "Nuwax Forge"
   short_description: "通过本机 CLI 执行有限 Agent 任务与预算核对"

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { safePath, inside, verifyBundle, read, write, snapshot, restore, fileMap } from './bundle-lib.mjs';
 
-const help = `node install.mjs install --host codex|deepseek-harness|nuwax [--root <managed-root>] [--host-root <agents-root|DSH_HOME>] [--workspace <nuwax-workspace>]
+const help = `node install.mjs install --host codex|deepseek-harness|nuwax [--root <managed-root>] [--host-root <agents-root|DSH_HOME>] [--workspace <nuwax-workspace>] [--bin-dir <user-bin>]
 node install.mjs rollback|uninstall --root <managed-root>
 Node>=22 / Python>=3.10; offline, no npm install. Existing unowned paths are never overwritten.`;
 const args = process.argv.slice(2), action = args.shift();
@@ -17,18 +17,18 @@ function main() {
   if (!['install', 'rollback', 'uninstall'].includes(action)) throw Error(help);
   const opts = {};
   for (let i = 0; i < args.length; i += 2) {
-    if (!['--host', '--root', '--host-root', '--workspace'].includes(args[i]) || !args[i + 1] || args[i + 1].startsWith('--') || opts[args[i]]) throw Error(help);
+    if (!['--host', '--root', '--host-root', '--workspace', '--bin-dir'].includes(args[i]) || !args[i + 1] || args[i + 1].startsWith('--') || opts[args[i]]) throw Error(help);
     opts[args[i]] = args[i + 1];
   }
   const host = opts['--host'];
   if (action === 'install' && !['codex', 'deepseek-harness', 'nuwax'].includes(host)) throw Error('--host 必须显式选择');
-  if (action !== 'install' && (!opts['--root'] || host || opts['--host-root'] || opts['--workspace'])) throw Error('rollback/uninstall 仅接受 --root');
-  const root = safePath(opts['--root'] ?? path.join(os.homedir(), '.local', 'share', 'nuwax-devkit', host));
+  if (action !== 'install' && (!opts['--root'] || host || opts['--host-root'] || opts['--workspace'] || opts['--bin-dir'])) throw Error('rollback/uninstall 仅接受 --root');
+  const root = safePath(opts['--root'] ?? path.join(os.homedir(), '.local', 'share', 'nuwax-forge', host));
   const bundle = safePath(path.dirname(fileURLToPath(import.meta.url)));
   if (inside(root, bundle) || inside(bundle, root)) throw Error('安装根与分发包不能交叠');
   const stateFile = path.join(root, 'managed.json');
   let state = fs.existsSync(stateFile) ? read(safePath(stateFile)) : null;
-  if (state && (state.owner !== 'nuwax-devkit-installer-v1' || state.root !== root || !Array.isArray(state.history) || !Array.isArray(state.originals))) throw Error('无效受管记录');
+  if (state && (state.owner !== 'nuwax-forge-installer-v1' || state.root !== root || !Array.isArray(state.history) || !Array.isArray(state.originals))) throw Error('无效受管记录');
   if (!state && fs.existsSync(root) && fs.readdirSync(root).length) throw Error('安装根已有非受管内容');
   if (!state && action !== 'install') throw Error('未找到受管安装');
   // Complete preflight before touching registrations. Host targets never overlap install/bundle roots.
@@ -46,8 +46,10 @@ function main() {
       const envRoot = host === 'deepseek-harness' ? process.env.DSH_HOME?.trim() : null;
       if (host === 'deepseek-harness' && !opts['--host-root'] && !envRoot) throw Error('DSH 需要已核对的 --host-root 或 DSH_HOME');
       const hostRoot = safePath(opts['--host-root'] ?? envRoot ?? path.join(os.homedir(), '.agents'));
-      targetPaths = [{ path: path.join(hostRoot, 'skills', 'nuwax-devkit'), kind: 'dir' }];
+      targetPaths = [{ path: path.join(hostRoot, 'skills', 'nuwax-forge'), kind: 'dir' }];
     }
+    const bin = safePath(opts['--bin-dir'] ?? path.join(os.homedir(), '.local', 'bin'));
+    targetPaths.push({path: path.join(bin, 'nuwax-forge'), kind: 'file'});
     if (state && (state.host !== host || JSON.stringify(state.originals.map(({path, kind}) => ({path, kind}))) !== JSON.stringify(targetPaths))) throw Error('受管根不能切换宿主或目标位置');
   } else targetPaths = state.originals.map(({path, kind}) => ({path, kind}));
   for (const t of targetPaths) {
@@ -61,8 +63,8 @@ function main() {
   }
   if (action === 'install' && !state) {
     for (const t of targetPaths) {
-      if (t.kind === 'dir' && snapshot(t.path, t.kind) !== null) throw Error('Skill 路径已有非受管内容');
-      if (host === 'nuwax' && t.path.endsWith('AGENTS.md') && fs.existsSync(t.path) && fs.readFileSync(t.path, 'utf8').includes('<!-- nuwax-devkit:')) throw Error('AGENTS 存在非受管同名标记');
+      if ((t.kind === 'dir' || t.path.endsWith('/nuwax-forge')) && snapshot(t.path, t.kind) !== null) throw Error('Skill 路径已有非受管内容');
+      if (host === 'nuwax' && t.path.endsWith('AGENTS.md') && fs.existsSync(t.path) && fs.readFileSync(t.path, 'utf8').includes('<!-- nuwax-forge:')) throw Error('AGENTS 存在非受管同名标记');
     }
   }
   if (action !== 'install' && !state.active) throw Error('当前没有活动安装');
@@ -79,7 +81,7 @@ function main() {
       if (JSON.stringify(snapshot(t.path, t.kind)) !== JSON.stringify(t.content)) throw Error('受管目标并发变化');
     }
     if (action === 'install') {
-      const release = path.join(root, 'versions', manifest.id), cli = path.join(release, 'node_modules', '@nuwax-ai', 'devkit-cli', 'bin', 'nuwax-devkit.mjs');
+      const release = path.join(root, 'versions', manifest.id), cli = path.join(release, 'node_modules', '@nuwax-ai', 'devkit-cli', 'bin', 'nuwax-forge.mjs');
       const crew = path.join(release, 'node_modules', '@nuwax-ai', 'devkit-crew');
       safePath(release);
       const stage = path.join(root, 'stage');
@@ -107,8 +109,13 @@ function main() {
       const originals = state?.originals ?? targetPaths.map(t => ({ ...t, content: snapshot(t.path, t.kind) }));
       if (host !== 'nuwax') targets = [{ ...targetPaths[0], content: snapshot(path.join(release, 'skill'), 'dir') }];
       else {
-        const originalAgents = originals[0].content ? Buffer.from(originals[0].content.data, 'base64').toString('utf8') : '';
-        const route = `\n<!-- nuwax-devkit:begin -->\n有限本机执行按需读取 ${path.join(release, 'skill', 'SKILL.md')}，调用 node ${JSON.stringify(path.join(release, 'skill', 'scripts', 'devkit.mjs'))}。平台统一入口保持 nuwax-stack；子执行器只完成短 brief，不加载主控 Skill 或递归派工。\n<!-- nuwax-devkit:end -->\n`;
+        const workspace = safePath(opts['--workspace']);
+        let originalAgents = originals[0].content ? Buffer.from(originals[0].content.data, 'base64').toString('utf8') : '';
+        const stack = path.join(release, 'node_modules', '@nuwax-ai', 'devkit-stack', 'modules', 'stack');
+        originalAgents = originalAgents.replaceAll('~/.codex/skills/nuwax-stack', stack).replaceAll(path.join(os.homedir(), '.codex/skills/nuwax-stack'), stack).replaceAll(path.join(workspace, '.agents/skills/nuwax-stack'), stack);
+        originalAgents = originalAgents.replaceAll('统一研发技能为 nuwax-stack（平台13555，0.4.0）', '统一研发技能为 nuwax-forge（平台13555），Stack 为内部模块')
+          .replaceAll('每次唤醒先加载 nuwax-stack', '每次唤醒先加载 nuwax-forge，按需读取 Stack 内部模块');
+        const route = `\n<!-- nuwax-forge:begin -->\n有限本机执行按需读取 ${path.join(release, 'skill', 'SKILL.md')}，调用 node ${JSON.stringify(path.join(release, 'skill', 'scripts', 'forge.mjs'))}。平台统一入口为 nuwax-forge，Stack 为内部模块；子执行器只完成短 brief，不加载主控 Skill 或递归派工。\n<!-- nuwax-forge:end -->\n`;
         const config = JSON.parse(Buffer.from(originals[1].content.data, 'base64').toString('utf8'));
         if (!config || Array.isArray(config) || typeof config !== 'object' || (config.runtimeGuard !== undefined && (!config.runtimeGuard || Array.isArray(config.runtimeGuard) || typeof config.runtimeGuard !== 'object'))) throw Error('work-computer.json/runtimeGuard 必须是对象');
         config.runtimeGuard = { ...config.runtimeGuard, devkitCli: cli, devkitCrewRoot: crew };
@@ -117,11 +124,20 @@ function main() {
           if (!tool || Array.isArray(tool) || typeof tool !== 'object') throw Error('runtimeGuard.tools.devkitCli 必须是对象');
           config.runtimeGuard.tools = { ...config.runtimeGuard.tools, devkitCli: { ...tool, path: cli } };
         }
+        const replacePaths = value => {
+          if (typeof value === 'string') return value.replaceAll(path.join(workspace, '.agents/skills/nuwax-stack'), stack).replaceAll(path.join(os.homedir(), '.codex/skills/nuwax-stack'), stack).replaceAll(path.join(workspace, '.agents/skills/nuwax-stack'), stack).replaceAll('~/.codex/skills/nuwax-stack', stack);
+          if (Array.isArray(value)) return value.map(replacePaths);
+          if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k,v]) => [k,replacePaths(v)]));
+          return value;
+        };
+        Object.assign(config, replacePaths(config));
         targets = [{ ...targetPaths[0], content: { data: Buffer.from(originalAgents + route).toString('base64'), mode: originals[0].content?.mode ?? 0o600 } },
           { ...targetPaths[1], content: { data: Buffer.from(JSON.stringify(config, null, 2) + '\n').toString('base64'), mode: originals[1].content.mode } }];
       }
+      const launcher = '#!/bin/sh\nexec ' + [process.execPath, cli].map(x => "'" + x.replaceAll("'", "'\\''") + "'").join(' ') + ' \"$@\"\n';
+      targets.push({...targetPaths.at(-1), content: {data: Buffer.from(launcher).toString('base64'), mode: 0o755}});
       if (state?.active && state.history.at(-1).id === manifest.id) { console.log(JSON.stringify({ status: 'unchanged', root, release, doctor: JSON.parse(check.stdout) })); return; }
-      const next = state ?? { owner: 'nuwax-devkit-installer-v1', root, host, originals, history: [] };
+      const next = state ?? { owner: 'nuwax-forge-installer-v1', root, host, originals, history: [] };
       const history = next.active === false ? [] : next.history;
       commitTargets(targets, { ...next, active: true, history: [...history, { id: manifest.id, release, targets }] }, stateFile);
       console.log(JSON.stringify({ status: 'installed', root, release, cli, skill: path.join(release, 'skill'), doctor: JSON.parse(check.stdout) }));

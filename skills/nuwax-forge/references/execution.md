@@ -1,6 +1,6 @@
 # 有限任务
 
-以下 CLI 均表示 `node <本Skill>/scripts/devkit.mjs`。仅按所选 runtime 准备 task.json，不加载全部宿主参考。
+以下 CLI 均表示 `node <本Skill>/scripts/forge.mjs`。仅按所选 runtime 准备 task.json，不加载全部宿主参考。
 
 ```sh
 CLI agent doctor --runtime codex --json

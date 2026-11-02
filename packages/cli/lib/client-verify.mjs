@@ -11,7 +11,7 @@ import { realpathNearestExisting, resolveStateReal, isInside } from './paths.mjs
 import { checkNode, checkPython } from './env.mjs';
 
 const fixedRecipe = JSON.parse(readFileSync(new URL('./client-tooling-recipe.json', import.meta.url), 'utf8'));
-const bin = fileURLToPath(new URL('../bin/nuwax-devkit.mjs', import.meta.url));
+const bin = fileURLToPath(new URL('../bin/nuwax-forge.mjs', import.meta.url));
 const hash = data => createHash('sha256').update(data).digest('hex');
 
 export async function runClientVerify({ project, state, node, python }) {

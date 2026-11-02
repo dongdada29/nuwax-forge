@@ -13,6 +13,7 @@ const bundle = path.join(base, 'bundle');
 const env = { ...process.env, NUWAX_DEVKIT_RESOLVE_ROOT: path.join(base, 'must-not-resolve-source') };
 delete env.DSH_HOME;
 function run(script, args, ok = true, extraEnv = {}) {
+  if (args[0] === 'install') args = [...args, '--bin-dir', path.resolve(args[args.indexOf('--root') + 1], '..', 'bin')];
   const p = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', env: { ...env, ...extraEnv }, timeout: 30000, cwd: base });
   assert.ifError(p.error);
   if (ok) assert.equal(p.status, 0, p.stderr + p.stdout);
@@ -39,7 +40,7 @@ function nuwax(hostRoot, format = 'nested') {
   return config;
 }
 function checkedDoctor(installed, skill) {
-  const d = run(path.join(skill, 'scripts', 'devkit.mjs'), ['doctor', '--json']);
+  const d = run(path.join(skill, 'scripts', 'forge.mjs'), ['doctor', '--json']);
   assert.equal(d.ok, true); assert.equal(d.problems.length, 0);
   assert.equal(d.checks.filter(c => c.check.startsWith('package:')).length, 5);
   for (const c of d.checks) { assert.equal(c.ok, true); if (c.artifact) assert.ok(c.artifact.startsWith(installed.release + path.sep), c.artifact); }
@@ -72,7 +73,7 @@ try {
     const originalConfig = host === 'nuwax' ? nuwax(f.hostRoot, format) : null;
     const original = snapshot(f.hostRoot, 'dir');
     const one = install(host, f.root, f.hostRoot); assert.equal(one.status, 'installed');
-    const skill = host === 'nuwax' ? one.skill : path.join(f.hostRoot, 'skills', 'nuwax-devkit');
+    const skill = host === 'nuwax' ? one.skill : path.join(f.hostRoot, 'skills', 'nuwax-forge');
     checkedDoctor(one, skill);
     assert.equal(read(path.join(skill, 'installation.json')).cli, one.cli);
     if (host === 'nuwax') {
@@ -109,8 +110,56 @@ try {
     action('uninstall', f.root); assert.deepEqual(snapshot(f.hostRoot, 'dir'), original);
   });
 
+  await test('nuwax: Chinese Stack entry declarations route to Forge and uninstall restores original bytes', () => {
+    const f = fixture('chinese-entry'); nuwax(f.hostRoot);
+    const originalAgents = Buffer.from(fs.readFileSync(path.join(source, 'scripts', 'fixtures', 'nuwax-stack-entry-AGENTS.md'), 'utf8').replaceAll('\n', '\r\n'));
+    fs.writeFileSync(path.join(f.hostRoot, 'AGENTS.md'), originalAgents);
+    const original = snapshot(f.hostRoot, 'dir');
+    const one = install('nuwax', f.root, f.hostRoot);
+    const two = install('nuwax', f.root, f.hostRoot, upgraded);
+    assert.notEqual(two.release, one.release);
+    const routed = fs.readFileSync(path.join(f.hostRoot, 'AGENTS.md'), 'utf8');
+    assert.match(routed, /统一研发技能为 nuwax-forge（平台13555），Stack 为内部模块/);
+    assert.match(routed, /每次唤醒先加载 nuwax-forge，按需读取 Stack 内部模块/);
+    assert.doesNotMatch(routed, /统一研发技能为 nuwax-stack|每次唤醒先加载 nuwax-stack|平台13555，0\.4\.0/);
+    assert.ok(routed.includes(path.join(two.release, 'node_modules', '@nuwax-ai', 'devkit-stack', 'modules', 'stack', 'scripts', 'runtime_guard.py')));
+    assert.ok(routed.includes('目标仓为 `nuwax-stack`，工作区目录为 `nuwax-stack-work`。保留无关 WIP。'));
+    assert.ok(routed.includes('保留原生助理的日常能力，不新增协调Agent，不使用nuwax-swarm，不创建新的轮询daemon。'));
+    assert.equal(read(path.join(f.root, 'managed.json')).originals[0].content.data, originalAgents.toString('base64'));
+    action('uninstall', f.root);
+    assert.deepEqual(fs.readFileSync(path.join(f.hostRoot, 'AGENTS.md')), originalAgents);
+    assert.deepEqual(snapshot(f.hostRoot, 'dir'), original);
+  });
+
+  for (const host of ['codex', 'deepseek-harness', 'nuwax']) await test(`${host}: legacy migration and recovery preserve registrations/data`, () => {
+    const f = fixture('migration-' + host);
+    if (host === 'nuwax') nuwax(f.hostRoot);
+    const original = snapshot(f.hostRoot, 'dir');
+    const legacy = path.join(base, 'legacy-' + host);
+    fs.cpSync(bundle, legacy, {recursive:true});
+    fs.copyFileSync(path.join(source,'scripts','fixtures','legacy-install.mjs'),path.join(legacy,'install.mjs'));
+    const lm = read(path.join(legacy,'manifest.json')); lm.files=fileMap(legacy); delete lm.files['manifest.json']; write(path.join(legacy,'manifest.json'),lm);
+    const args=['install','--host',host,'--root',f.root,host==='nuwax'?'--workspace':'--host-root',f.hostRoot];
+    const l=spawnSync(process.execPath,[path.join(legacy,'install.mjs'),...args],{encoding:'utf8'});assert.equal(l.status,0,l.stderr);
+    const before=snapshot(f.hostRoot,'dir'),oldState=fs.readFileSync(path.join(f.root,'managed.json'));
+    const forge=path.join(base,'forge-'+host),backup=path.join(base,'backup-'+host),bin=path.join(base,'bin-'+host);
+    const migration=['--legacy-bundle',legacy,'--legacy-root',f.root,'--root',forge,'--host',host,host==='nuwax'?'--workspace':'--host-root',f.hostRoot,'--backup',backup,'--bin-dir',bin];
+    const result=run(path.join(bundle,'migrate.mjs'),migration);
+    assert.ok(fs.existsSync(path.join(bin,'nuwax-forge')));
+    if(host!=='nuwax') { assert.ok(!fs.existsSync(path.join(f.hostRoot,'skills','nuwax-devkit'))); assert.ok(fs.existsSync(path.join(f.hostRoot,'skills','nuwax-forge','SKILL.md'))); }
+    const doc=spawnSync(process.execPath,[result.cli,'stack','module','--name','runtime-guard'],{encoding:'utf8'});assert.equal(doc.status,0,doc.stderr);assert.match(doc.stdout,/lease/);
+    const escape=spawnSync(process.execPath,[result.cli,'stack','module','--name','../../secret'],{encoding:'utf8'});assert.notEqual(escape.status,0);
+    const help=spawnSync(path.join(bin,'nuwax-forge'),['help'],{encoding:'utf8'});assert.equal(help.status,0,help.stderr);assert.match(help.stdout,/nuwax-forge stack runtime/);
+    run(path.join(bundle,'migrate.mjs'),['--restore',backup]);
+    assert.deepEqual(snapshot(f.hostRoot,'dir'),before);assert.deepEqual(fs.readFileSync(path.join(f.root,'managed.json')),oldState);
+    // Inject doctor failure after legacy uninstall: the bridge restores original bytes.
+    const failed=['--legacy-bundle',legacy,'--legacy-root',f.root,'--root',path.join(base,'fail-'+host),'--host',host,host==='nuwax'?'--workspace':'--host-root',f.hostRoot,'--backup',path.join(base,'fail-backup-'+host),'--bin-dir',bin];
+    run(path.join(bundle,'migrate.mjs'),failed,false,{NUWAX_DEVKIT_PYTHON:path.join(base,'missing-python')});
+    assert.deepEqual(snapshot(f.hostRoot,'dir'),before);assert.deepEqual(fs.readFileSync(path.join(f.root,'managed.json')),oldState);
+  });
+
   await test('unowned roots, Skills, managed markers and edited registrations are preserved', () => {
-    const f = fixture('conflicts'); const skill = path.join(f.hostRoot, 'skills', 'nuwax-devkit');
+    const f = fixture('conflicts'); const skill = path.join(f.hostRoot, 'skills', 'nuwax-forge');
     fs.mkdirSync(skill, { recursive: true }); fs.writeFileSync(path.join(skill, 'owned-by-user'), 'preserve');
     const before = snapshot(f.hostRoot, 'dir');
     run(path.join(bundle, 'install.mjs'), ['install', '--host', 'codex', '--root', f.root, '--host-root', f.hostRoot], false);
@@ -118,9 +167,9 @@ try {
     fs.mkdirSync(f.root); fs.writeFileSync(path.join(f.root, 'unowned'), 'preserve');
     const rootBefore = snapshot(f.root, 'dir');
     run(path.join(bundle, 'install.mjs'), ['install', '--host', 'codex', '--root', f.root, '--host-root', f.hostRoot], false); assert.deepEqual(snapshot(f.root, 'dir'), rootBefore);
-    const n = fixture('marker'); nuwax(n.hostRoot); fs.appendFileSync(path.join(n.hostRoot, 'AGENTS.md'), '<!-- nuwax-devkit:begin -->');
+    const n = fixture('marker'); nuwax(n.hostRoot); fs.appendFileSync(path.join(n.hostRoot, 'AGENTS.md'), '<!-- nuwax-forge:begin -->');
     const nb = snapshot(n.hostRoot, 'dir'); run(path.join(bundle, 'install.mjs'), ['install', '--host', 'nuwax', '--root', n.root, '--workspace', n.hostRoot], false); assert.deepEqual(snapshot(n.hostRoot, 'dir'), nb);
-    const e = fixture('edited'); install('codex', e.root, e.hostRoot); fs.appendFileSync(path.join(e.hostRoot, 'skills', 'nuwax-devkit', 'SKILL.md'), '\nuser edit');
+    const e = fixture('edited'); install('codex', e.root, e.hostRoot); fs.appendFileSync(path.join(e.hostRoot, 'skills', 'nuwax-forge', 'SKILL.md'), '\nuser edit');
     const eb = snapshot(e.hostRoot, 'dir'); const sb = fs.readFileSync(path.join(e.root, 'managed.json'));
     action('uninstall', e.root, bundle, false);
     run(path.join(upgraded, 'install.mjs'), ['install', '--host', 'codex', '--root', e.root, '--host-root', e.hostRoot], false);
@@ -136,7 +185,7 @@ try {
     if (fs.realpathSync(os.tmpdir()) !== os.tmpdir()) assert.throws(() => safePath(path.join(os.tmpdir(), 'devkit', 'root')));
     run(path.join(bundle, 'install.mjs'), ['install', '--host', 'deepseek-harness', '--root', f.root], false); assert.ok(!fs.existsSync(f.root));
     const a = install('codex', f.root, f.hostRoot); const releaseBefore = fileMap(a.release);
-    const script = path.join(f.hostRoot, 'skills', 'nuwax-devkit', 'SKILL.md'); fs.unlinkSync(script); fs.symlinkSync(path.join(a.release, 'skill', 'SKILL.md'), script);
+    const script = path.join(f.hostRoot, 'skills', 'nuwax-forge', 'SKILL.md'); fs.unlinkSync(script); fs.symlinkSync(path.join(a.release, 'skill', 'SKILL.md'), script);
     action('uninstall', f.root, bundle, false); assert.deepEqual(fileMap(a.release), releaseBefore);
     const v = fixture('version-symlink'); const versionInstall = install('codex', v.root, v.hostRoot); action('uninstall', v.root);
     fs.renameSync(path.join(v.root, 'versions'), path.join(v.root, 'saved-versions')); fs.symlinkSync(path.join(v.root, 'saved-versions'), path.join(v.root, 'versions'), 'dir');

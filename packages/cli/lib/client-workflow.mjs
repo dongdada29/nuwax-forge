@@ -11,7 +11,7 @@ export async function runClientWorkflow(opts) {
   const validator = resolvePackage('@nuwax-ai/devkit-stack')?.root;
   if (!validator) throw new Error('stack 未安装');
   const args = ['-B', runtime, opts.subcommand ?? 'run', '--spec', realpathSync(opts.spec), '--state', opts.state,
-    '--cli', fileURLToPath(new URL('../bin/nuwax-devkit.mjs', import.meta.url)), '--validator', validator + '/skills/nuwax-stack/scripts/verification.py',
+    '--cli', fileURLToPath(new URL('../bin/nuwax-forge.mjs', import.meta.url)), '--validator', validator + '/skills/nuwax-stack/scripts/verification.py',
     '--roots', JSON.stringify(allDevkitRoots())];
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
   const code = await new Promise((resolve, reject) => {

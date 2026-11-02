@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// live runner 子进程（受信 argv 调用，不进 shell）：由 `nuwax-devkit gui run` 显式派发。
+// live runner 子进程（受信 argv 调用，不进 shell）：由 `nuwax-forge gui run` 显式派发。
 // cwd 是仓外 attempt 目录 → Midscene 报告落盘在该目录（midscene_report/…），与业务仓隔离。
 // 生命周期契约：单一 puppeteer.connect（defaultViewport:null，不改用户视口）；finally 中
 // agent.destroy()（等待报告 flush）+ browser.disconnect()（外部附着应用**不关闭**，绝不 browser.close）。

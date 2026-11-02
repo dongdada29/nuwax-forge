@@ -1,5 +1,5 @@
 // GUI 配方契约（guiRecipeSchemaVersion=1）：与 source-tooling 的 verification-v1 是**独立契约**，
-// 不导入 TaskStore、不复用其完成态；仅由显式 `nuwax-devkit gui run` 消费。
+// 不导入 TaskStore、不复用其完成态；仅由显式 `nuwax-forge gui run` 消费。
 // 目标锁定必须显式 shell vs 商业 guest + 预期 origin；登录/就绪前提显式声明；
 // 模型只承担视觉语义（aiBoolean），固定选择/输入/清理必须是确定性 DOM 操作。
 // 占位符（含 <…>、TODO、PLACEHOLDER）一律拒绝——不允许拿模板冒充可运行配方。

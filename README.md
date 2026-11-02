@@ -1,4 +1,4 @@
-# nuwax-devkit
+# nuwax-forge
 
 独立验收：source-tooling、五包离线分发及 Nuwax client 的具名 GUI 场景通过。新增内置 token 预测与实耗对账，并接入执行前/步间拦截。最新见 [执行预算与浪费拆分验收](docs/EXECUTION-BUDGET-ACCEPTANCE-20261027.md)；GUI阶段见 [本次 GUI/token 验收](docs/CLIENT-GUI-TOKEN-ACCEPTANCE-20261027.md)；前期固定流程对比见 [原验收报告](ACCEPTANCE-REPORT.md)。
 
@@ -19,7 +19,7 @@ stack / crew / kit 三条源码线（含未跟踪实现与 dot 配置）整编�
 | nuwax-crew | `@nuwax-ai/devkit-crew` | 有限调用路由与执行验收（Python 标准库） |
 | nuwa-sdlc-kit | `@nuwax-ai/nuwa-sdlc-kit`（保留原名） | 仓内规则层 + 固定配方运行器（kit/VERSION 1.5.0） |
 | contracts | `@nuwax-ai/devkit-contracts` | verification-v1 正本 schema、level 边界、GUI 合成 fixture 校验器 |
-| cli | `@nuwax-ai/devkit-cli` | `nuwax-devkit` 命令（doctor / init / verify / run / gui run / budget estimate / budget reconcile） |
+| cli | `@nuwax-ai/devkit-cli` | `nuwax-forge` 命令（doctor / init / verify / run / gui run / budget estimate / budget reconcile） |
 
 要求：**Node >= 22，Python >= 3.10（标准库）**；npm 分发只携带 Python 源码，运行仍需本机 Python。
 零外部依赖，无 Nx/Turbo/TS 构建。版本策略统一为 `X.Y.Z-devkit-local.N` 本地预发布；
@@ -27,8 +27,10 @@ CLI 对 4 个兄弟包用**精确同版本**依赖（workspace 内本地链接�
 
 ## 快速开始（真实命令）
 
+新远端：[nuwax-ai/nuwax-forge](https://github.com/nuwax-ai/nuwax-forge.git)。
+
 ```sh
-cd /Users/apple/workspace/nuwax-devkit
+cd nuwax-forge # 新 clone 目录；已有 checkout 继续使用原目录
 npm install --ignore-scripts --offline --no-audit --no-fund   # 已验证：5 包本地链接
 npm test                                                      # 全部工作区测试
 npm run contracts:check                                       # 契约正本 ↔ stack 副本字节一致
@@ -38,11 +40,11 @@ npm run pack                                                  # 5 个 tarball �
 CLI（帮助 / 体检 / 接线 / 验收）：
 
 ```sh
-node packages/cli/bin/nuwax-devkit.mjs help
-node packages/cli/bin/nuwax-devkit.mjs doctor            # Node/Python 版本 + 5 包绑定；--json 输出 JSON
-node packages/cli/bin/nuwax-devkit.mjs init --project <外部项目> --recipe <仓内相对配方路径>
-node packages/cli/bin/nuwax-devkit.mjs client-verify --project <client项目> --state <仓外状态目录>
-node packages/cli/bin/nuwax-devkit.mjs verify --project <外部项目> --state <仓外状态目录> \
+node packages/cli/bin/nuwax-forge.mjs help
+node packages/cli/bin/nuwax-forge.mjs doctor            # Node/Python 版本 + 5 包绑定；--json 输出 JSON
+node packages/cli/bin/nuwax-forge.mjs init --project <外部项目> --recipe <仓内相对配方路径>
+node packages/cli/bin/nuwax-forge.mjs client-verify --project <client项目> --state <仓外状态目录>
+node packages/cli/bin/nuwax-forge.mjs verify --project <外部项目> --state <仓外状态目录> \
   --task-key <任务键> [--node <可信node绝对路径>] [--python <python解释器>] [--reuse]
 ```
 
@@ -58,13 +60,13 @@ node packages/cli/bin/nuwax-devkit.mjs verify --project <外部项目> --state <
 
 ```sh
 # 显式有限派工：模型任务必须有预算与上下文声明
-node packages/cli/bin/nuwax-devkit.mjs run --plan <plan.json> --project <项目> --state <仓外目录> --brief-file <有限交接.txt>
+node packages/cli/bin/nuwax-forge.mjs run --plan <plan.json> --project <项目> --state <仓外目录> --brief-file <有限交接.txt>
 # 显式附着已授权的本机 CDP；SDK、Puppeteer、登录和模型环境需提前就绪
-node packages/cli/bin/nuwax-devkit.mjs gui run --recipe <场景.json> --state <仓外目录> \
+node packages/cli/bin/nuwax-forge.mjs gui run --recipe <场景.json> --state <仓外目录> \
   --budget-spec <任务预算.json> --cdp http://127.0.0.1:19222 --sdk <Midscene包目录> --runtime <Puppeteer包目录> --budget-spec <预算.json> --json
-node packages/cli/bin/nuwax-devkit.mjs run --plan <plan.json> --project <工作目录> --state <仓外目录> --brief-file <有限正文.txt>
-node packages/cli/bin/nuwax-devkit.mjs budget estimate --spec <任务预算.json> --out <预测.json> --json
-node packages/cli/bin/nuwax-devkit.mjs budget reconcile --estimate <预测.json> --actual <GUI-manifest.json> \
+node packages/cli/bin/nuwax-forge.mjs run --plan <plan.json> --project <工作目录> --state <仓外目录> --brief-file <有限正文.txt>
+node packages/cli/bin/nuwax-forge.mjs budget estimate --spec <任务预算.json> --out <预测.json> --json
+node packages/cli/bin/nuwax-forge.mjs budget reconcile --estimate <预测.json> --actual <GUI-manifest.json> \
   --history <校准.jsonl> --out <对账.json> --json
 ```
 

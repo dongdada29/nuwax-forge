@@ -54,8 +54,8 @@ export async function runVerify({ project, state, 'task-key': taskKey, node, pyt
 
   const stack = resolvePackage('@nuwax-ai/devkit-stack');
   const crew = resolvePackage('@nuwax-ai/devkit-crew');
-  if (!stack) throw new Error('未找到 @nuwax-ai/devkit-stack（先安装 5 个 devkit 包，或运行 nuwax-devkit doctor）');
-  if (!crew) throw new Error('未找到 @nuwax-ai/devkit-crew（先安装 5 个 devkit 包，或运行 nuwax-devkit doctor）');
+  if (!stack) throw new Error('未找到 @nuwax-ai/devkit-stack（先安装 5 个 devkit 包，或运行 nuwax-forge doctor）');
+  if (!crew) throw new Error('未找到 @nuwax-ai/devkit-crew（先安装 5 个 devkit 包，或运行 nuwax-forge doctor）');
 
   // 配方门：结构最小验证 + level 收紧（在创建 state 之前失败）
   const binding = validateProjectBinding(projectDir);

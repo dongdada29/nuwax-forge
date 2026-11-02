@@ -2,13 +2,14 @@
   "name": "@nuwax-ai/devkit-cli",
   "version": "0.1.0-devkit-local.1",
   "private": true,
-  "description": "nuwax-devkit CLI（nuwax-devkit）：doctor / init / verify 的零依赖 Node ESM 入口",
+  "description": "Nuwax Forge CLI：统一研发入口",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "bin": {
+    "nuwax-forge": "./bin/nuwax-forge.mjs",
     "nuwax-devkit": "./bin/nuwax-devkit.mjs"
   },
   "files": [

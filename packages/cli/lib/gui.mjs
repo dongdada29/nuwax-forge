@@ -1,4 +1,4 @@
-// `nuwax-devkit gui run`：显式 live GUI 验证入口（与 source-tooling `verify` 完全分开；
+// `nuwax-forge gui run`：显式 live GUI 验证入口（与 source-tooling `verify` 完全分开；
 // verify 仍只放行 source-tooling 配方）。默认安装/测试/pack 完全不触发本路径、不装 SDK、不联网。
 //
 // 仅支持外部附着（--cdp，且只接受本机回环端点）：自有实例 launch 无真实可证明的数据目录隔离，
@@ -224,7 +224,7 @@ export async function runGui({ recipe: recipeArg, state, sdk, runtime, cdp, 'lau
     kind: 'gui-verification-v1',
     note: '独立 GUI 验证契约：不导入 source-tooling TaskStore；本 manifest 只声明本次 driver 实际执行与断言校验，不复用历史 GUI 动态证据',
     level: recipe.level, attemptId, startedAt: startedAt.toISOString(), elapsedMs,
-    command: { bin: 'nuwax-devkit', argv: ['gui', 'run', '--recipe', recipeArg, '--state', state, '--cdp', cdp] },
+    command: { bin: 'nuwax-forge', argv: ['gui', 'run', '--recipe', recipeArg, '--state', state, '--cdp', cdp] },
     recipe: { id: recipe.id, scenarioVersion: recipe.scenarioVersion, sha256: sha256String(recipeText), file: recipeFile },
     declaredBuild: recipe.declaredBuild, // 声明式，未验证；实际身份看 observedIdentity
     observedIdentity: result?.observedIdentity ?? null, // CDP Browser 版本/目标 URL(去敏感参数)/targetId/SDK 版本

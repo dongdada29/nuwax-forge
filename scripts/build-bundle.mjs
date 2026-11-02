@@ -27,10 +27,10 @@ function copy(from, to) {
 const versions = {};
 // Keep runtime code/resources only: npm pack intentionally retains its own broader list.
 const runtime = {
-  cli: ['bin/nuwax-devkit.mjs', 'lib/'],
+  cli: ['bin/nuwax-forge.mjs', 'bin/nuwax-devkit.mjs', 'lib/'],
   contracts: ['schemas/', 'gui/'],
   'nuwax-crew': ['crew/'],
-  'nuwax-stack': ['skills/nuwax-stack/scripts/run_verification.py', 'skills/nuwax-stack/scripts/task_state.py', 'skills/nuwax-stack/scripts/verification.py'],
+  'nuwax-stack': ['modules/stack/', 'skills/nuwax-stack/scripts/run_verification.py', 'skills/nuwax-stack/scripts/task_state.py', 'skills/nuwax-stack/scripts/verification.py'],
   'nuwa-sdlc-kit': ['cli.mjs', 'kit/'],
 };
 for (const [dir, resources] of Object.entries(runtime)) {
@@ -42,8 +42,9 @@ for (const [dir, resources] of Object.entries(runtime)) {
     copy(path.join(root, rel), path.join(dest, rel));
   }
 }
-copy(path.join(source, 'skills', 'nuwax-devkit'), path.join(out, 'payload', 'skill'));
+copy(path.join(source, 'skills', 'nuwax-forge'), path.join(out, 'payload', 'skill'));
 copy(path.join(source, 'scripts', 'offline-install.mjs'), path.join(out, 'install.mjs'));
+copy(path.join(source, 'scripts', 'migrate-forge.mjs'), path.join(out, 'migrate.mjs'));
 copy(path.join(source, 'scripts', 'bundle-lib.mjs'), path.join(out, 'bundle-lib.mjs'));
 copy(path.join(source, 'docs', 'INSTALLATION.md'), path.join(out, 'docs', 'INSTALLATION.md'));
 write(path.join(out, 'manifest.json'), { schemaVersion: 1, version: versions['@nuwax-ai/devkit-cli'], packages: versions, files: fileMap(out) });

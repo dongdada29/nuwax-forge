@@ -1,4 +1,4 @@
-// lib/budget/cli.mjs —— `nuwax-devkit budget estimate|reconcile` 命令实现。
+// lib/budget/cli.mjs —— `nuwax-forge budget estimate|reconcile` 命令实现。
 // 只读显式给出的文件（不扫仓、不读凭据）；输出不覆盖任何输入/源文件；写入原子（tmp+rename）。
 // reconcile：全部路径守卫先于任何写副作用（out/history 双向检查），实耗不完整或口径未知时不写校准样本。
 import { readFileSync, writeFileSync, renameSync, statSync, realpathSync, existsSync } from 'node:fs';

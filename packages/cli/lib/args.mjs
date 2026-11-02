@@ -2,28 +2,30 @@
 export class UsageError extends Error {}
 
 export const USAGE = `用法：
-  nuwax-devkit help
-  nuwax-devkit doctor [--json]
-  nuwax-devkit agent doctor --runtime <codex|deepseek-harness> [--binary <可信绝对路径>] --json
-  nuwax-devkit agent prepare --spec <agent JSON> --brief-file <短任务书> --state <新仓外目录>
-  nuwax-devkit agent [run|reconcile] --state <已准备仓外目录>
-  nuwax-devkit init --project <外部项目目录> --recipe <仓内相对配方路径>
-  nuwax-devkit verify --project <外部项目目录> --state <仓外状态目录> --task-key <任务键>
+  nuwax-forge stack module --name <runtime-guard|triage|autonomous-run|...>
+  nuwax-forge stack runtime --command <check|lease|context|backoff|dispatch|record> --profile <profile.json> [--input <JSON>]
+  nuwax-forge help
+  nuwax-forge doctor [--json]
+  nuwax-forge agent doctor --runtime <codex|deepseek-harness> [--binary <可信绝对路径>] --json
+  nuwax-forge agent prepare --spec <agent JSON> --brief-file <短任务书> --state <新仓外目录>
+  nuwax-forge agent [run|reconcile] --state <已准备仓外目录>
+  nuwax-forge init --project <外部项目目录> --recipe <仓内相对配方路径>
+  nuwax-forge verify --project <外部项目目录> --state <仓外状态目录> --task-key <任务键>
                       [--node <可信node绝对路径>] [--python <python解释器>] [--reuse]
-  nuwax-devkit client-workflow [run|seal] --spec <JSON> --state <fresh仓外目录>
-  nuwax-devkit client-verify --project <client目录> --state <仓外状态目录>
+  nuwax-forge client-workflow [run|seal] --spec <JSON> --state <fresh仓外目录>
+  nuwax-forge client-verify --project <client目录> --state <仓外状态目录>
                               [--node <可信node绝对路径>] [--python <python解释器>]
-  nuwax-devkit run --plan <plan JSON> --project <工作目录> --state <仓外状态目录>
+  nuwax-forge run --plan <plan JSON> --project <工作目录> --state <仓外状态目录>
                    --brief-file <有限任务正文> [--python <python解释器>] [--timeout N]
-  nuwax-devkit gui run --recipe <GUI 配方 JSON 文件> --state <仓外状态目录>
+  nuwax-forge gui run --recipe <GUI 配方 JSON 文件> --state <仓外状态目录>
                        (--cdp <CDP http 端点> | --launch-config <自有实例 JSON>)
                        [--sdk <@midscene/web 位置>] [--runtime <puppeteer-core 位置>]
                        [--budget-spec <预算 JSON>] [--budget-history <仓外校准 JSONL>]
                        [--max-wall-seconds N] [--json]
-  nuwax-devkit budget estimate --spec <spec JSON> [--history <校准 JSONL>] [--out <输出 JSON>] --json
-  nuwax-devkit budget reconcile --estimate <估算 JSON> --actual <GUI manifest|usage|Claude result JSON>
+  nuwax-forge budget estimate --spec <spec JSON> [--history <校准 JSONL>] [--out <输出 JSON>] --json
+  nuwax-forge budget reconcile --estimate <估算 JSON> --actual <GUI manifest|usage|Claude result JSON>
                                [--history <校准 JSONL>] [--out <输出 JSON>] --json
-  nuwax-devkit budget guard --sessions <codex 会话 JSONL 文件或目录> --budget <预算 JSON>
+  nuwax-forge budget guard --sessions <codex 会话 JSONL 文件或目录> --budget <预算 JSON>
                             [--marker <起点标记文本>] [--parent-id <宿主线程 id>] --json
 
 说明：

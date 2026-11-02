@@ -1,8 +1,8 @@
 {
-  "name": "nuwax-devkit",
+  "name": "nuwax-forge",
   "version": "0.0.0",
   "private": true,
-  "description": "nuwax-devkit 多包仓库：stack/crew/kit 三源码包 + contracts + cli（本地预发布，不发布到 registry）",
+  "description": "Nuwax Forge：统一入口，Stack / Crew / Kit 内部模块",
   "workspaces": [
     "packages/*"
   ],
