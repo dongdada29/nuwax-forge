@@ -75,7 +75,14 @@ try {
     const one = install(host, f.root, f.hostRoot); assert.equal(one.status, 'installed');
     const skill = host === 'nuwax' ? one.skill : path.join(f.hostRoot, 'skills', 'nuwax-forge');
     checkedDoctor(one, skill);
-    assert.equal(read(path.join(skill, 'installation.json')).cli, one.cli);
+    const binding = read(path.join(skill, 'installation.json'));
+    assert.equal(binding.schemaVersion, 2); assert.equal(binding.command, 'nuwax-forge');
+    assert.equal(binding.cli, undefined); assert.equal(binding.release, undefined);
+    if (host !== 'nuwax') {
+      assert.ok(!path.isAbsolute(binding.runtimeRoot));
+      assert.equal(path.resolve(skill, binding.runtimeRoot), f.root);
+      assert.ok(!binding.runtimeRoot.includes(path.basename(one.release)));
+    }
     if (host === 'nuwax') {
       const now = read(path.join(f.hostRoot, 'work-computer.json'));
       assert.equal(now.runtimeGuard.devkitCli, one.cli);
@@ -96,7 +103,8 @@ try {
     assert.deepEqual(fs.readFileSync(path.join(f.root, 'managed.json')), stateBefore);
     assert.deepEqual(snapshot(f.hostRoot, 'dir'), hostBefore);
     const two = install(host, f.root, f.hostRoot, upgraded); assert.notEqual(two.release, one.release);
-    assert.equal(read(path.join(skill === one.skill ? two.skill : skill, 'installation.json')).cli, two.cli);
+    assert.deepEqual(read(path.join(skill === one.skill ? two.skill : skill, 'installation.json')), binding);
+    checkedDoctor(two, skill === one.skill ? two.skill : skill);
     assert.equal(action('rollback', f.root).status, 'rolled-back');
     assert.deepEqual(snapshot(f.hostRoot, 'dir'), hostBefore);
     checkedDoctor(one, skill);
@@ -108,6 +116,42 @@ try {
     for (const t of state.originals) assert.deepEqual(snapshot(t.path, t.kind), t.content);
     assert.equal(install(host, f.root, f.hostRoot).status, 'installed');
     action('uninstall', f.root); assert.deepEqual(snapshot(f.hostRoot, 'dir'), original);
+  });
+
+  await test('complete releases run after relocation without the original username/root/version path', () => {
+    const f = fixture('relocate-release');
+    const one = install('codex', f.root, f.hostRoot);
+    const moved = path.join(base, 'another-user', 'release with spaces');
+    fs.mkdirSync(path.dirname(moved), { recursive: true });
+    fs.renameSync(one.release, moved);
+    assert.deepEqual(read(path.join(moved, 'skill/installation.json')), { schemaVersion: 2, command: 'nuwax-forge' });
+    checkedDoctor({ release: moved }, path.join(moved, 'skill'));
+  });
+
+  await test('registered copies follow a relocated managed root using the same relative descriptor', () => {
+    const f = fixture('relocate-registration');
+    const one = install('codex', f.root, f.hostRoot);
+    const moved = path.join(base, 'different-user-home');
+    fs.renameSync(path.dirname(f.root), moved);
+    const release = path.join(moved, 'managed', 'versions', path.basename(one.release));
+    const skill = path.join(moved, 'host', 'skills', 'nuwax-forge');
+    checkedDoctor({ release }, skill);
+    const config = read(path.join(skill, 'installation.json'));
+    config.runtimeRoot = path.join(moved, 'managed'); write(path.join(skill, 'installation.json'), config);
+    run(path.join(skill, 'scripts/forge.mjs'), ['doctor', '--json'], false);
+  });
+
+  await test('a generic shared Skill resolves the installed command through PATH', () => {
+    const f = fixture('shared-skill');
+    const one = install('codex', f.root, f.hostRoot);
+    const skill = path.join(base, 'shared skill');
+    fs.cpSync(path.join(bundle, 'payload/skill'), skill, { recursive: true });
+    assert.deepEqual(read(path.join(skill, 'installation.json')), { schemaVersion: 2, command: 'nuwax-forge' });
+    const d = run(path.join(skill, 'scripts/forge.mjs'), ['doctor', '--json'], true, {
+      PATH: path.join(path.dirname(f.root), 'bin') + path.delimiter + process.env.PATH,
+    });
+    assert.equal(d.ok, true);
+    assert.ok(d.checks.find(c => c.artifact).artifact.startsWith(one.release + path.sep));
   });
 
   await test('nuwax: Chinese Stack entry declarations route to Forge and uninstall restores original bytes', () => {

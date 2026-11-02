@@ -90,7 +90,6 @@ function main() {
       try {
         fs.cpSync(path.join(bundle, 'payload', 'packages'), path.join(stage, 'node_modules'), { recursive: true });
         fs.cpSync(path.join(bundle, 'payload', 'skill'), path.join(stage, 'skill'), { recursive: true });
-        write(path.join(stage, 'skill', 'installation.json'), { schemaVersion: 1, cli, release });
         write(path.join(stage, 'bundle-manifest.json'), manifest);
         write(path.join(stage, 'release-hashes.json'), fileMap(stage));
         const hashes = read(path.join(stage, 'release-hashes.json'));
@@ -107,7 +106,15 @@ function main() {
       if (check.status !== 0) throw Error(`安装版 doctor 失败: ${check.stderr || check.stdout}`);
       let targets;
       const originals = state?.originals ?? targetPaths.map(t => ({ ...t, content: snapshot(t.path, t.kind) }));
-      if (host !== 'nuwax') targets = [{ ...targetPaths[0], content: snapshot(path.join(release, 'skill'), 'dir') }];
+      if (host !== 'nuwax') {
+        const content = snapshot(path.join(release, 'skill'), 'dir');
+        // Registered copies follow the active version without baking a username or version into the Skill.
+        const runtimeRoot = path.relative(targetPaths[0].path, root).split(path.sep).join('/');
+        content.files['installation.json'].data = Buffer.from(JSON.stringify({
+          schemaVersion: 2, command: 'nuwax-forge', runtimeRoot,
+        }, null, 2) + '\n').toString('base64');
+        targets = [{ ...targetPaths[0], content }];
+      }
       else {
         const workspace = safePath(opts['--workspace']);
         let originalAgents = originals[0].content ? Buffer.from(originals[0].content.data, 'base64').toString('utf8') : '';
