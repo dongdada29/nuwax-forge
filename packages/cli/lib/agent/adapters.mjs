@@ -52,8 +52,9 @@ export function command(spec, state) {
   if (spec.runtime.kind === 'codex') return [spec.runtime.binary, 'exec', '--json', '--ephemeral', '--ignore-user-config',
     '--ignore-rules', '--color', 'never', '--sandbox', spec.permissions.mode, '--cd', spec.worktree,
     '-m', spec.runtime.model, '-c', 'approval_policy="never"', '-c', 'project_doc_max_bytes=0',
-    '-c', 'features.multi_agent=false', '-c', 'model_providers.openai.request_max_retries=0',
-    '-c', 'model_providers.openai.stream_max_retries=0', '-'];
+    // Codex reserves built-in provider IDs. Keep its native provider/auth routing;
+    // provider retries remain CLI-managed, bounded here by the outer wall-time limit.
+    '-c', 'features.multi_agent=false', '-'];
   return [spec.runtime.binary, '--profile', 'headless', '--patch', path.join(state, 'dsh.patch.json'), '--json', '-'];
 }
 export function environment(kind, state) {

@@ -31,6 +31,9 @@ function fixture(t, kind = 'codex', events = codexEvents, hang = false) {
 const args=process.argv.slice(2);
 if(args.includes('--version')) {console.log(${JSON.stringify(kind === 'codex' ? 'codex-cli 0.165.0' : '0.2.1-rc.5')});process.exit(0)}
 if(args.includes('--help')) {console.log('--json --ephemeral --ignore-user-config --ignore-rules --sandbox --cd --patch headless');process.exit(0)}
+if (${JSON.stringify(kind)} === 'codex' && args.some(arg => /^model_providers[.]openai(?:[.=]|$)/.test(arg))) {
+  console.error('model_providers contains reserved built-in provider IDs: openai'); process.exit(1);
+}
 fs.appendFileSync(${JSON.stringify(marker)},'dispatch\\n');
 for await (const chunk of process.stdin) {}
 ${hang ? 'setInterval(()=>{},1000);' : `for(const event of ${JSON.stringify(events)}) console.log(JSON.stringify(event));`}
