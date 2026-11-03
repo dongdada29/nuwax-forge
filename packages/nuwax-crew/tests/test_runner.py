@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from crew import ledger, runner  # noqa: E402
+from crew import ledger, runner, unified_dashboard  # noqa: E402
 
 
 def plan(*assignments):
@@ -37,6 +37,25 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual([r["status"] for r in rows], ["dispatched", "completed"])
         log = Path(out["results"][0]["log"]).read_text(encoding="utf-8")
         self.assertIn("OK-测试任务正文", log)
+
+    def test_worker_delivery_is_propagated_to_ledger_and_dashboard(self):
+        delivery = {'branch': 'feature/test', 'commit': 'da5734d279', 'prUrl': 'https://example.org/o/r/pull/1'}
+        script = "import json,pathlib,sys; (pathlib.Path(sys.argv[1])/'delivery.json').write_text(sys.argv[2])"
+        p = plan({'role': 'implement', 'executor': 'test', 'command': [sys.executable, '-c', script, '{stepArtifacts}', json.dumps(delivery)]})
+        out = self.execute(p)
+        self.assertEqual(out['results'][0]['delivery'], delivery)
+        records = unified_dashboard.crew_records([json.loads(line) for line in self.ledger_path.read_text().splitlines()])
+        self.assertEqual({k: records[0][k] for k in delivery}, delivery)
+        self.assertFalse(out['acceptancePassed'])  # A worker claim is not verification.
+
+    def test_delivery_rejects_symlink_and_unsafe_references(self):
+        target = self.base / 'outside.json'
+        target.write_text('{"commit":"abcdef0"}')
+        step = self.base / 'step'
+        step.mkdir()
+        (step / 'delivery.json').symlink_to(target)
+        self.assertEqual(runner._read_delivery(step), {})
+        self.assertEqual(unified_dashboard.delivery_fields({'commit': '$(bad)', 'prUrl': 'javascript:alert(1)'}), {})
 
     def test_failure_path_records_failed_and_keeps_log(self):
         out = self.execute(plan({"role": "implement", "executor": "bad", "command": "echo boom >&2; exit 3"}))

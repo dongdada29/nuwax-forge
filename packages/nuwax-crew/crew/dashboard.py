@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import html
+import os
+import re
+import shlex
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from . import unified_dashboard
@@ -110,6 +113,8 @@ h2{font-size:14px;letter-spacing:.09em}.meta{line-height:1.7}
 .summary-list li{padding:9px 0}.route-list{list-style:none}.route-list li{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding:10px 0;min-width:0}
 .route-node{background:#23344a;border:1px solid #334b64;border-radius:7px;padding:4px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:44%}
 .route-node.unknown{color:var(--dim);background:#202838;border-color:#344154}.route-count{color:var(--dim);margin-left:auto;white-space:nowrap;font-size:11px}
+.engine-grid{display:flex;gap:8px;flex-wrap:wrap}.engine-chip{border:1px solid #334b64;background:#1c2c40;border-radius:8px;padding:7px 10px;font-size:12px}.engine-chip small{display:block;color:var(--dim);margin-top:2px}
+.delivery-cell{min-width:180px;overflow-wrap:anywhere}.delivery-cell div+div{margin-top:4px}.delivery-cell a{color:var(--blue)}
 table{border-radius:10px;overflow:hidden}th{background:#1a2637}
 @media(max-width:1000px){.summary-card,.summary-card.wide{grid-column:span 6}}
 @media(max-width:650px){.summary-card,.summary-card.wide{grid-column:span 12}.donut{width:128px;height:128px}.summary-grid{gap:10px}.bar-row{grid-template-columns:110px 1fr 30px}header{align-items:flex-start;gap:10px}.meta{max-width:55%}}
@@ -118,6 +123,43 @@ table{border-radius:10px;overflow:hidden}th{background:#1a2637}
 
 def esc(s) -> str:
     return html.escape(str(s if s is not None else ""), quote=True)
+
+
+def configured_engine(executor):
+    """Best-effort label from the configured executable, never a model claim."""
+    command = (executor.get('invocation') or {}).get('command')
+    try:
+        parts = shlex.split(command) if isinstance(command, str) else list(command) if isinstance(command, list) else []
+        parts = [p for p in parts if isinstance(p, str)]
+    except ValueError:
+        return '未识别'
+    if not parts: return '未识别'
+    if os.path.basename(parts[0]) == 'env':
+        i = 1
+        while i < len(parts):
+            if parts[i] in ('-u', '--unset'):
+                i += 2
+            elif re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', parts[i]):
+                i += 1
+            else:
+                break
+        parts = parts[i:]
+    if not parts: return '未识别'
+    command_name = os.path.basename(parts[0]).lower()
+    if command_name in ('node', 'bun') and len(parts) > 1:
+        command_name = os.path.basename(parts[1]).lower()
+    return {'omp': 'OMP', 'dsh': 'DeepSeek Harness', 'zcode': 'Z Code', 'zcode.cjs': 'Z Code',
+            'opencode': 'OpenCode', 'claude': 'Claude Code', 'codex': 'Codex'}.get(command_name, '未识别')
+
+
+def delivery_html(record):
+    delivery = unified_dashboard.delivery_fields(record)
+    rows = []
+    if delivery.get('branch'): rows.append('分支：' + esc(delivery['branch']))
+    if delivery.get('commit'): rows.append('提交：<code>' + esc(delivery['commit']) + '</code>')
+    if delivery.get('prUrl'):
+        rows.append('PR：<a href="' + esc(delivery['prUrl']) + '" target="_blank" rel="noopener noreferrer">查看 PR ↗</a>')
+    return ''.join('<div>' + row + '</div>' for row in rows) or '<span class="dim">未记录</span>'
 
 
 def _status_cell(name: str, meta: dict, health: dict) -> str:
@@ -223,8 +265,22 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
         f"<td>{esc(r.get('attemptId') or 'unknown')}</td><td>{esc(r.get('executor') or 'unknown')}</td>"
         f"<td>{esc(r.get('role') or 'unknown')}</td><td>{esc(r.get('model') or 'unknown')}</td>"
         f"<td>{esc(r.get('status') or 'unknown')}</td><td>{esc(r.get('tokens') if r.get('tokens') is not None else 'unknown')}</td>"
-        f"<td>{esc(r.get('modelCalls') if r.get('modelCalls') is not None else 'unknown')}</td></tr>"
-        for r in records[-200:][::-1]) or '<tr><td colspan="9">暂无记录</td></tr>'
+        f"<td>{esc(r.get('modelCalls') if r.get('modelCalls') is not None else 'unknown')}</td>"
+        f"<td class='delivery-cell'>{delivery_html(r)}</td></tr>"
+        for r in records[-200:][::-1]) or '<tr><td colspan="10">暂无记录</td></tr>'
+    engine_rows = []
+    for meta in registry['executors']:
+        stats = ex.get(meta['name'], {})
+        engine_rows.append(f"<tr><td>{esc(meta['name'])}</td><td>{esc(configured_engine(meta))}</td>"
+                           f"<td>{esc(meta.get('provider') or '未记录')}</td><td>{esc(meta.get('subscription') or '未记录')}</td>"
+                           f"<td>{stats.get('total', 0)}</td></tr>")
+    engine_table = ''.join(engine_rows) or '<tr><td colspan="5">暂无注册信息</td></tr>'
+    engine_chips = []
+    for engine in ('OMP', 'DeepSeek Harness', 'Z Code', 'OpenCode', 'Codex', 'Claude Code'):
+        items = [m['name'] for m in registry['executors'] if configured_engine(m) == engine]
+        if items:
+            engine_chips.append(f'<span class="engine-chip"><b>{esc(engine)}</b><small>{esc("、".join(items))} · 已登记</small></span>')
+    engine_chips_html = ''.join(engine_chips) or '<span class="dim">没有可识别的启动命令</span>'
     edges = unified_dashboard.route_edges(records)
     route_rows = ''.join(
         f"<tr><td>{esc(e['source'])}</td><td>{esc(e['router'])}<span class='route-arrow'>→</span>{esc(e['worker'])}</td>"
@@ -238,7 +294,7 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
     chart_items = sorted(chart_groups.items(), key=lambda item: (-item[1], item[0]))[:8]
     chart_max = max((count for _, count in chart_items), default=1)
     chart_html = ''.join(
-        f'<div class="bar-row"><span>{esc(source)} / {esc(executor)}</span>'
+        f'<div class="bar-row"><span>{esc(source)} · 标签：{esc(executor)}</span>'
         f'<div class="bar-track"><div class="bar-fill" style="width:{count / chart_max * 100:.1f}%"></div></div><b>{count}</b></div>'
         for (source, executor), count in chart_items) or '<p class="dim">暂无执行记录</p>'
     # Crew events are grouped into attempts above; never combine them with
@@ -299,10 +355,11 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <section data-view="overview"><div class="summary-grid">
 <div class="summary-card wide"><div class="chart-label">Activity · 7 days</div><h3>近七天派工活动</h3><p>以 UTC 当日为截止，按台账时间戳中的日期统计原始记录，包含派工和结果事件。</p><div class="trend" role="img" aria-label="近七天 Crew 台账记录数">{trend_html}</div></div>
 <div class="summary-card"><div class="chart-label">Attempt status</div><h3>任务状态分布</h3><p>仅统计 Crew 中可归并的尝试及无法归并的历史记录。</p>{status_chart}</div>
-<div class="summary-card"><div class="chart-label">Executors</div><h3>执行器记录分布</h3><p>各来源分别统计，条形按最大值缩放。</p>{chart_html}</div>
+<div class="summary-card"><div class="chart-label">Executors</div><h3>执行器标签分布</h3><p>台账标签不等于模型；按来源分别统计。</p>{chart_html}</div>
 <div class="summary-card"><div class="chart-label">Routing</div><h3>Router → Worker</h3><p>来源未记录 Router 身份时显示“未记录”。</p><ul class="route-list">{route_preview}</ul></div>
 <div class="summary-card"><div class="chart-label">In progress</div><h3>进行中记录 · {len(ongoing)}</h3><p>依据台账状态，未核验进程是否仍在运行。</p><ul class="summary-list">{ongoing_html}</ul></div>
-<div class="summary-card wide"><div class="chart-label">Recent dispatches</div><h3>最近派工</h3><ul class="summary-list">{recent_html}</ul></div>
+<div class="summary-card wide"><div class="chart-label">Registered engines</div><h3>已登记引擎</h3><p>按当前注册表启动命令识别，不代表已产生记录或已验证当前运行。</p><div class="engine-grid">{engine_chips_html}</div></div>
+<div class="summary-card"><div class="chart-label">Recent dispatches</div><h3>最近派工</h3><ul class="summary-list">{recent_html}</ul></div>
 </div></section>
 <section data-view="routes"><h2>路由关系 <b>ROUTER → WORKER</b></h2>
 <p class="dim">仅 host-guard 记录明确的宿主到 Worker 关联；其他来源的 Router 身份未记录，不能据此推断具体路由者。记录数按来源分开，不跨来源合并。</p>
@@ -311,7 +368,8 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <p class="dim">按来源分别统计，跨来源可能是同一次执行；已知 token 为部分合计，未知次数单列。缺少 attemptId 的历史记录无法去重。host-guard 是观测快照，不含后续消耗；模型为执行记录声明，不推断实际供应商账单。</p>
 {notes_html}
 <table data-paginate="models"><tr><th>来源</th><th>执行器</th><th>角色</th><th>模型</th><th>尝试/记录</th><th>已知 token</th><th>用量未知</th></tr>{model_rows}</table></section>
-<section data-view="tasks"><h2>任务与执行 <b>TASK / ASSIGNMENT</b>（按来源顺序最多 200 条）</h2><table data-paginate="tasks"><tr><th>来源</th><th>任务</th><th>尝试</th><th>执行器</th><th>角色</th><th>模型</th><th>状态</th><th>token</th><th>模型调用</th></tr>{task_rows}</table></section>
+<section data-view="tasks"><h2>任务与执行 <b>TASK / ASSIGNMENT</b>（按来源顺序最多 200 条）</h2><p class="dim">交付结果来自执行记录或执行器报告，尚未独立验证分支、提交或 PR。</p><table data-paginate="tasks"><tr><th>来源</th><th>任务</th><th>尝试</th><th>执行器</th><th>角色</th><th>模型</th><th>状态</th><th>token</th><th>模型调用</th><th>交付结果</th></tr>{task_rows}</table></section>
+<section data-view="models"><h2>已登记引擎与通道 <b>ENGINE / PROVIDER</b></h2><p class="dim">载体由当前注册表的启动命令识别；提供方是当前配置。历史模型以执行记录为准，未记录不回填。</p><table data-paginate="engines"><tr><th>执行器标签</th><th>配置的载体</th><th>配置的提供方</th><th>订阅 / 通道</th><th>台账记录数</th></tr>{engine_table}</table></section>
 <section data-view="models"><h2>订阅使用量 <b>SUBSCRIPTION USAGE</b></h2><div class="subs">{subs_html}</div></section>
 <section data-view="models"><h2>执行器池 <b>EXECUTOR POOL</b></h2>
 <table data-paginate="pool"><tr><th>执行器</th><th>层</th><th>订阅</th><th>状态</th><th>今日记录</th><th>记录成功率</th><th>记录数</th><th>最近</th></tr>{pool_html}</table></section>

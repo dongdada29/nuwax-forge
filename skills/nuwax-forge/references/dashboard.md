@@ -28,6 +28,8 @@ node "$ENTRY" dashboard --ledger "$CREW_LEDGER" --registry "$CREW_REGISTRY" --ou
 - Stack 来源读取 Assignment 当前行；旧任务库没有 `assignments` 表时显示未接入，不会迁移库。Forge agent state 仅在 `modelDispatched=true` 时计入，prepare/doctor 不计为调用。
 - `host-guard` 的 router/worker 消耗是指定时间窗的观测快照，不含快照之后的调用或最终回复尾部；其他宿主和未提供的运行不会自动出现。
 - 路由关系仅在 host-guard 明确提供宿主和 Worker 时展示具体关联；其他来源没有 Router 身份时显示“未记录”，不要根据任务名推测父子关系。
+- 引擎列表从当前注册表的启动命令识别载体并展示配置提供方；历史执行标签、当前配置和历史实际模型是不同字段。OMP、DSH 等显示“已登记”不代表 Forge 的 `agent` 入口已实现其适配或当前调用成功。
+- Crew 一次执行的分支、提交、PR 可由执行器在 `NUWAX_CREW_STEP_ARTIFACTS/delivery.json` 写入，例如 `{"branch":"feature/example","commit":"abc1234","prUrl":"https://github.com/org/repo/pull/1"}`，字段可省略。仅该次执行明确报告的结果被采集，属于未独立验证的执行器声明；不从任务名、当前工作区 HEAD 或其他来源推断，也不自动执行提交、推送或创建 PR。其他来源只有明确存储同名结构化字段时才展示。
 - 未知 token 或调用数显示 `unknown`；真实 0 保留为 0。已知 token 是部分合计；跨来源可能表示同一次运行，**不能直接相加**。来源不全、授权未确认、快照不完整或缺失时，说明覆盖范围，不宣称总量、最终封账或预算通过。
 
 静态 HTML 需要显式重新生成。是否发布、分享或修改平台/安装配置仍取决于用户已授权的范围。

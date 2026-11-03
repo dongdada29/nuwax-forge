@@ -1,7 +1,9 @@
 """Explicit local sources for the Forge dashboard. No network or state mutation."""
 import json
+import re
 import sqlite3
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def _tokens(value):
@@ -10,6 +12,29 @@ def _tokens(value):
 
 def _text(value):
     return value if isinstance(value, str) and value.strip() else None
+
+
+def delivery_fields(*sources):
+    """Accept only explicit structured delivery references, never parse free text."""
+    result = {}
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        nested = source.get('delivery') if isinstance(source.get('delivery'), dict) else {}
+        for data in (source, nested):
+            commit = _text(data.get('commit'))
+            branch = _text(data.get('branch'))
+            pr = _text(data.get('prUrl')) or _text(data.get('pullRequestUrl'))
+            if commit and re.fullmatch(r'[a-fA-F0-9]{7,64}', commit): result['commit'] = commit
+            if branch and len(branch) <= 255 and not any(ord(c) < 32 for c in branch): result['branch'] = branch
+            if pr and len(pr) <= 2048 and not any(ord(c) < 32 for c in pr):
+                try:
+                    url = urlsplit(pr)
+                    if url.scheme in ('https', 'http') and url.hostname and not url.username and not url.password:
+                        result['prUrl'] = pr
+                except ValueError:
+                    pass
+    return result
 
 
 def crew_records(rows):
@@ -38,7 +63,7 @@ def crew_records(rows):
                         'executor': _text(row.get('executor')), 'role': _text(row.get('role')), 'model': model,
                         'status': row.get('status'), 'tokens': charge if 'chargedTokens' in details else old.get('tokens'),
                         'at': row.get('ts') or row.get('atUtc') or old.get('at'),
-                        'legacyUncorrelated': not bool(attempt)}
+                        'legacyUncorrelated': not bool(attempt), **delivery_fields(old, row, details)}
     return list(grouped.values())
 
 
@@ -55,7 +80,7 @@ def task_store_records(path):
         out.append({'source': 'stack', 'taskKey': task, 'attemptId': attempt,
                     'executor': _text(payload.get('executor')), 'role': _text(payload.get('role')),
                     'model': _text(payload.get('model')), 'status': state, 'tokens': _tokens(usage.get('tokens')),
-                    'modelCalls': _tokens(usage.get('modelCalls')), 'at': None})
+                    'modelCalls': _tokens(usage.get('modelCalls')), 'at': None, **delivery_fields(payload)})
     return out
 
 
@@ -71,7 +96,7 @@ def agent_state_record(path):
     return {'source': 'forge-agent', 'taskKey': manifest.get('taskKey'), 'attemptId': None,
             'executor': _text(runtime.get('kind')), 'role': 'worker', 'model': _text(runtime.get('model')),
             'status': manifest.get('status'), 'tokens': _tokens(manifest.get('chargedTokens')) if manifest.get('usageKnown') is True else None,
-            'modelCalls': None, 'at': manifest.get('startedAt')}
+            'modelCalls': None, 'at': manifest.get('startedAt'), **delivery_fields(manifest)}
 
 
 def host_guard_records(path):

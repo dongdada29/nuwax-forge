@@ -48,6 +48,23 @@ class UsageTests(unittest.TestCase):
 
 
 class DashboardTests(unittest.TestCase):
+    def test_engine_labels_and_explicit_delivery_are_distinct(self):
+        registry = {'executors': [
+            {'name': 'zhipu-glm', 'provider': 'zhipu', 'invocation': {'command': 'env -u XDG_CONFIG_HOME HOME=/x opencode run -m zhipu/glm-5.3 {brief}'}},
+            {'name': 'zcode', 'provider': 'zai', 'invocation': {'command': 'env TOKEN=redacted node /app/zcode.cjs {brief}'}},
+            {'name': 'omp', 'invocation': {'command': 'omp {brief}'}},
+            {'name': 'dsh', 'invocation': {'command': 'dsh {brief}'}},
+        ]}
+        self.assertEqual([dashboard.configured_engine(e) for e in registry['executors']], ['OpenCode', 'Z Code', 'OMP', 'DeepSeek Harness'])
+        data = usage.aggregate([], registry, today='2026-10-23')
+        record = {'source': 'crew', 'taskKey': 't', 'executor': 'zcode', 'role': 'worker', 'status': 'success',
+                  'branch': 'feature/<x>', 'commit': 'da5734d279', 'prUrl': 'https://example.org/o/r/pull/1'}
+        page = dashboard.build_html(data, registry, {}, [], [], generated_at='test', records=[record])
+        for value in ('OpenCode', 'Z Code', 'OMP', 'DeepSeek Harness', 'da5734d279', 'feature/&lt;x&gt;', 'https://example.org/o/r/pull/1'):
+            self.assertIn(value, page)
+        self.assertNotIn('feature/<x>', page)
+        self.assertNotIn('TOKEN=redacted', page)
+
     def test_charts_keep_crew_status_scope_and_show_empty_days(self):
         entries = rows(("2026-10-23T01:00:00+00:00", "a", "codex", "dispatched"),
                        ("2026-10-23T02:00:00+00:00", "a", "codex", "success"))
