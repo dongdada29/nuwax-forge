@@ -11,6 +11,8 @@ stack / crew / kit 三条源码线（含未跟踪实现与 dot 配置）整编�
 [试点基线数据](docs/PILOT-BASELINE.md) · [DSH/GUI 评审（脱敏）](docs/DSH-GUI-DRIVER-REVIEW.md) ·
 [交付结果](IMPLEMENTATION-RESULT.md) · [Token 预算功能](docs/TOKEN-BUDGET.md) · [GUI 驱动用法](docs/MIDSCENE-LIVE.md)。
 
+v3.0.26 修复场景实跑发现了环境变化后仍复用旧通过结论的问题；复现证据、验收边界和改进顺序见 [2026-10-29 实跑优化方案](docs/IMPROVEMENT-PROPOSAL-20261029.md)。该修复批次现调整为 v3.1.0，历史证据保留采集时版本标识。修复复用问题前相关验收应使用全新执行结果。
+
 ## 包
 
 | 包（packages/） | npm 名 | 角色 |
