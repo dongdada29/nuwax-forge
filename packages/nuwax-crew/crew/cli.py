@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 
-from . import contract, dashboard, dispatch, health, ledger, registry, router, runner, usage
+from . import contract, dashboard, dispatch, health, ledger, registry, router, runner, usage, unified_dashboard
 
 VERIFY_BRIEF = {
     "taskKey": "executor-verify-mini",
@@ -105,14 +106,103 @@ def cmd_dashboard(args) -> int:
     from pathlib import Path
     reg = registry.load(args.registry)
     data = usage.summary(args.ledger, reg, days=7)
-    h = Path(args.health)
-    health_data = json.loads(h.read_text(encoding="utf-8")) if args.health and h.exists() else {}
-    m = Path(args.matrix)
-    matrix = json.loads(m.read_text(encoding="utf-8")) if args.matrix and m.exists() else []
-    flow_rows = usage.load_rows(args.ledger)[-20:][::-1]
+    h = Path(args.health) if args.health else None
+    health_data = json.loads(h.read_text(encoding="utf-8")) if h and h.exists() else {}
+    m = Path(args.matrix) if args.matrix else None
+    matrix = json.loads(m.read_text(encoding="utf-8")) if m and m.exists() else []
+    inputs = [Path(x).resolve() for x in (args.ledger, args.registry, args.health, args.matrix, args.task_store, args.host_budget) if x]
+    agent_dirs = {Path(args.agent_state).resolve(strict=True)} if args.agent_state else set()
+    if args.agent_state_root:
+        root = Path(args.agent_state_root).resolve(strict=True)
+        if not root.is_dir():
+            raise ValueError('agent-state-root 必须是目录')
+        entries = list(root.iterdir())
+        if len(entries) > 1000:
+            raise ValueError('agent-state-root 超过 1000 个条目')
+        agent_dirs.update(p.resolve() for p in entries if not p.is_symlink() and p.is_dir() and (p / 'manifest.json').is_file() and (p / 'request.json').is_file())
+    for directory in agent_dirs:
+        inputs.extend((directory / name for name in ('request.json', 'manifest.json')))
+    output = Path(args.out).resolve()
+    if any(output == p or (output.exists() and p.exists() and output.samefile(p)) for p in inputs):
+        raise ValueError('看板输出不得覆盖输入')
+    rows = usage.load_rows(args.ledger)
+    flow_rows = rows[-20:][::-1]
+    records = unified_dashboard.crew_records(rows)
+    notes = []
+    if args.task_store:
+        stack_records = unified_dashboard.task_store_records(args.task_store)
+        if stack_records is None:
+            notes.append('Stack 任务库尚无 Assignment 表；该来源未接入')
+        else:
+            records.extend(stack_records)
+    if args.host_budget:
+        records.extend(unified_dashboard.host_guard_records(args.host_budget))
+    for directory in sorted(agent_dirs):
+        record = unified_dashboard.agent_state_record(directory)
+        if record is not None:
+            records.append(record)
     out = dashboard.write_dashboard(args.out, usage=data, registry=reg, health=health_data,
-                                    matrix=matrix, flow_rows=flow_rows)
+                                    matrix=matrix, flow_rows=flow_rows, records=records, notes=notes)
     print(out)
+    return 0
+
+
+def cmd_dashboard_server(args) -> int:
+    """Explicit foreground server; regenerate only on local requests."""
+    import contextlib
+    import copy
+    import io
+    import tempfile
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from pathlib import Path
+
+    if args.out:
+        raise ValueError('--serve 不接受 --out')
+    if not 0 <= args.port <= 65535 or not 5 <= args.refresh_seconds <= 3600:
+        raise ValueError('port 必须为 0..65535，refresh-seconds 必须为 5..3600')
+    with tempfile.TemporaryDirectory(prefix='nuwax-dashboard-') as temp:
+        snapshot = copy.copy(args)
+        snapshot.out = str(Path(temp) / 'dashboard.html')
+        lock = threading.Lock()
+
+        def render():
+            with lock, contextlib.redirect_stdout(io.StringIO()):
+                cmd_dashboard(snapshot)
+                page = Path(snapshot.out).read_text(encoding='utf-8')
+            return page.replace('<head>', f'<head><meta http-equiv="refresh" content="{args.refresh_seconds}">', 1).encode('utf-8')
+
+        render()  # Fail before listening if an explicit source is invalid.
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path not in ('/', '/index.html'):
+                    self.send_error(404)
+                    return
+                try:
+                    content = render()
+                except (OSError, ValueError, sqlite3.Error):
+                    self.send_error(503, 'Dashboard source unavailable')
+                    return
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+
+            def log_message(self, *_args):
+                pass
+
+        with ThreadingHTTPServer(('127.0.0.1', args.port), Handler) as server:
+            print(json.dumps({'status':'listening', 'url':f'http://127.0.0.1:{server.server_port}/',
+                              'refreshSeconds':args.refresh_seconds}), flush=True)
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                pass
     return 0
 
 
@@ -176,13 +266,22 @@ def main(argv=None) -> int:
     p.add_argument("--registry", required=True)
     p.add_argument("--health", default=None)
     p.add_argument("--matrix", default=None)
-    p.add_argument("--out", required=True)
-    p.set_defaults(func=cmd_dashboard)
+    p.add_argument("--task-store", default=None, help="Stack tasks.sqlite，只读")
+    p.add_argument("--agent-state", default=None, help="Forge agent 单次运行 state 目录，只读")
+    p.add_argument("--agent-state-root", default=None, help="包含多次 agent state 的目录，只读一层")
+    p.add_argument("--host-budget", default=None, help="Codex budget guard JSON 快照，只读")
+    p.add_argument("--out")
+    p.add_argument("--serve", action="store_true", help="前台监听本机并按访问刷新")
+    p.add_argument("--port", type=int, default=0)
+    p.add_argument("--refresh-seconds", type=int, default=30)
+    p.set_defaults(func=lambda args: cmd_dashboard_server(args) if args.serve else cmd_dashboard(args))
 
     args = parser.parse_args(argv)
     try:
+        if args.cmd == 'dashboard' and not args.serve and not args.out:
+            raise ValueError('dashboard 需要 --out 或 --serve')
         return args.func(args)
-    except (contract.ContractError, registry.RegistryError, health.HealthError, runner.RunError, ValueError, FileNotFoundError) as err:
+    except (contract.ContractError, registry.RegistryError, health.HealthError, runner.RunError, ValueError, OSError, sqlite3.Error) as err:
         print(f"停止：{err}", file=sys.stderr)
         return 1
 

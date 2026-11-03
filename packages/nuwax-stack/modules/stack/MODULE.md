@@ -27,6 +27,7 @@ Nuwax Forge 是统一安装、绑定与升级的唯一 Skill/CLI 入口。Stack 
 | 需要源码依据或实施前核对现场 | [真实仓分析](references/analyze-repo.md)：追踪因果并保留路径、行号和 HEAD |
 | 已授权实施、需要独立推进 | [自主循环](references/autonomous-run.md)与[行为验证](references/verify.md)：实施、验证、修正、保存检查点 |
 | 环境检查、重复阻塞退避、压缩恢复、统一派工预算 | [运行前置协议](references/runtime-guard.md)：先脚本恢复，再按需读取模块 |
+| 查看任务、模型及 Router/Worker 用量 | 回到当前加载的 Forge Skill，按需读取其 `references/dashboard.md`；不另挂 Stack Skill |
 | 新会话、中断恢复或再次唤醒 | [断点接手](references/session-pickup.md)：检查修订和租约，恢复下一步 |
 | 同步需求、维护个人任务进度 | [独立台账](references/task-ledger.md)：单向同步，校验写目标，保留个人字段 |
 | 形成决策、受阻、通知或交接 | [决策记录](references/decision-log.md)：证据、未知项、下一步及通知身份核验 |

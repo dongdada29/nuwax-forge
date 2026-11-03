@@ -96,6 +96,13 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
         command = a.get("command")
         executor = a.get("executor", "?")
         role = a.get("role", "unknown")
+        assignment_runtime = a.get('runtime') if isinstance(a.get('runtime'), dict) else {}
+        plan_runtime = plan.get('runtime') if isinstance(plan.get('runtime'), dict) else {}
+        model = a.get('model') or assignment_runtime.get('model') or plan.get('model') or plan_runtime.get('model')
+        if isinstance(model, dict):
+            model = model.get('name')
+        if not isinstance(model, str) or not model.strip():
+            model = None
         managed = model_assignment(plan, a)
         if not command:
             results.append({"executor": executor, "role": role, "status": "skipped",
@@ -115,7 +122,7 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
             if not decision.get("allowed"):
                 ledger.record(ledger_path, task_key=plan["taskKey"], executor=executor, role=role, status="blocked",
                               attempt_id=attempt_id, phase="budget-guard",
-                              details={"reason": decision.get("reason"), "guardFile": str(step_root / "budget-guard.json"), "command": metadata})
+                              details={"reason": decision.get("reason"), "guardFile": str(step_root / "budget-guard.json"), "command": metadata, "model": model, "stepIndex": index + 1})
                 results.append({"executor": executor, "role": role, "status": "blocked", "managed": True,
                                 "processPassed": False, "reason": decision.get("reason"), "budget": decision,
                                 "command": metadata})
@@ -131,7 +138,7 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
             (step_root / "command.json").write_text(json.dumps(cmd, ensure_ascii=False) + "\n", encoding="utf-8")
             (step_root / "command.json").chmod(0o600)
         ledger.record(ledger_path, task_key=plan["taskKey"], executor=executor, role=role, status="dispatched",
-                      attempt_id=attempt_id, phase="execution", details={"managed": managed, "command": metadata})
+                      attempt_id=attempt_id, phase="execution", details={"managed": managed, "command": metadata, "model": model, "stepIndex": index + 1})
         log = root / f"{index + 1}-{_safe(executor)}-{_safe(role)}.log"
         started = time.monotonic()
         failure = None
@@ -193,7 +200,7 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
         summary = summary[-400:]
         ledger.record(ledger_path, task_key=plan["taskKey"], executor=executor, role=role, status=status,
                       attempt_id=attempt_id, phase="execution", elapsed_seconds=elapsed,
-                      details={"managed": managed, "chargedTokens": settlement.get("chargedTokens") if settlement else None,
+                      details={"managed": managed, "model": model, "stepIndex": index + 1, "chargedTokens": settlement.get("chargedTokens") if settlement else None,
                                "remainingTokens": budget.remaining if managed else None})
         results.append({"executor": executor, "role": role, "status": status,
                         "managed": managed, "command": metadata, "budget": decision, "settlement": settlement,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 from datetime import datetime, timezone
 from pathlib import Path
+from . import unified_dashboard
 
 BOARD_COLUMNS = [
     ("待分诊/待决策", ["pending-triage", "pending", "plan-only", "pending-decision"], "wait"),
@@ -94,7 +95,7 @@ def board_columns(matrix: list) -> list:
     return [(title, cls, buckets[title]) for title, _, cls in BOARD_COLUMNS]
 
 
-def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_rows: list, *, generated_at: str) -> str:
+def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_rows: list, *, generated_at: str, records=None, notes=None) -> str:
     ex = usage["perExecutor"]
     subs = usage["perSubscription"]
     total = sum(v["total"] for v in ex.values())
@@ -105,12 +106,12 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 
     kpis = f"""
     <div class="kpis">
-      <div class="kpi"><div class="n">{total}</div><div class="l">累计派工</div></div>
-      <div class="kpi good"><div class="n">{ok_rate}</div><div class="l">派工成功率</div></div>
+      <div class="kpi"><div class="n">{total}</div><div class="l">台账记录</div></div>
+      <div class="kpi good"><div class="n">{ok_rate}</div><div class="l">记录成功率</div></div>
       <div class="kpi hot"><div class="n">{len(active)}</div><div class="l">可用执行器</div></div>
       <div class="kpi {'bad' if health else ''}"><div class="n">{len(health)}</div><div class="l">冷却中</div></div>
       <div class="kpi"><div class="n">{len(matrix)}</div><div class="l">看板条目</div></div>
-      <div class="kpi bad"><div class="n">{failed}</div><div class="l">失败单数</div></div>
+      <div class="kpi bad"><div class="n">{failed}</div><div class="l">失败记录数</div></div>
     </div>"""
 
     sub_cards = []
@@ -128,15 +129,15 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
         rate = f"{s['okRate']:.0%}" if s["okRate"] is not None else "—"
         chips = "".join(f'<span class="chip">{esc(n)}</span>' for n in s["executors"])
         sub_cards.append(f"""<div class="sub {cls}"><h3>{esc(label)}</h3>
-        <div class="row"><span>调用 <b>{s['total']}</b></span><span>近{usage['days']}天 <b>{s['window']}</b></span>
-        <span>成功率 <b>{rate}</b></span><span>失败 <b>{s['failed']}</b></span></div>
+        <div class="row"><span>记录 <b>{s['total']}</b></span><span>近{usage['days']}天 <b>{s['window']}</b></span>
+        <span>记录成功率 <b>{rate}</b></span><span>失败 <b>{s['failed']}</b></span></div>
         <div class="chips">{chips}</div></div>""")
     subs_html = "".join(sub_cards) or '<div class="dim">暂无派工记录</div>'
 
     tier_order = {"S": 0, "A": 1, "B": 2, "C": 3, "fixed": 4}
     pool_rows = []
     for name, v in sorted(ex.items(), key=lambda kv: (tier_order.get(kv[1].get("tier"), 9), kv[0])):
-        cap = f"{v['today']}/{v['dailyCap']}" if v.get("dailyCap") else "—"
+        cap = str(v['today'])
         rate = f"{v['okRate']:.0%}" if v["okRate"] is not None else "—"
         pool_rows.append(f"""<tr><td><b>{esc(name)}</b></td><td><span class="badge {esc(v.get('tier') or '')}">{esc(v.get('tier') or '-')}</span></td>
         <td>{esc(v.get('subscription') or '-')}</td><td>{_status_cell(name, v, health)}</td>
@@ -158,26 +159,48 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
         f"<td class=\"{'ok' if r.get('status') in ('completed', 'success') else ('err' if r.get('status') == 'failed' else 'dim')}\">{esc(r.get('status', '-'))}</td></tr>"
         for r in flow_rows)
 
+    records = records or []
+    notes_html = ''.join(f'<p class="warn">{esc(note)}</p>' for note in (notes or []))
+    groups = unified_dashboard.summarize(records)
+    totals = {source: sum(g['attempts'] for g in groups if g['source'] == source) for source in {g['source'] for g in groups}}
+    model_rows = ''.join(
+        f"<tr><td>{esc(g['source'])}</td><td>{esc(g['executor'])}</td><td>{esc(g['role'])}</td><td>{esc(g['model'])}</td>"
+        f"<td>{g['attempts']} ({g['attempts'] / totals[g['source']]:.0%}) <meter min='0' max='{totals[g['source']]}' value='{g['attempts']}'></meter></td>"
+        f"<td>{format(g['knownTokens'], ',') if g['knownCount'] else 'unknown'}</td><td>{g['unknownTokens']}</td></tr>"
+        for g in groups) or '<tr><td colspan="7">暂无记录</td></tr>'
+    task_rows = ''.join(
+        f"<tr><td>{esc(r.get('source'))}</td><td>{esc(r.get('taskKey') or 'unknown')}</td>"
+        f"<td>{esc(r.get('attemptId') or 'unknown')}</td><td>{esc(r.get('executor') or 'unknown')}</td>"
+        f"<td>{esc(r.get('role') or 'unknown')}</td><td>{esc(r.get('model') or 'unknown')}</td>"
+        f"<td>{esc(r.get('status') or 'unknown')}</td><td>{esc(r.get('tokens') if r.get('tokens') is not None else 'unknown')}</td>"
+        f"<td>{esc(r.get('modelCalls') if r.get('modelCalls') is not None else 'unknown')}</td></tr>"
+        for r in records[-200:][::-1]) or '<tr><td colspan="9">暂无记录</td></tr>'
+
     return f"""<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>nuwax-crew 运行看板</title><style>{CSS}</style></head>
 <body><div class="wrap">
 <header><h1>nuwax-crew <span class="tag">// 运行看板</span></h1>
 <div class="meta">生成于 {esc(generated_at)}<br>数据：executors.json · crew-usage.jsonl · crew-health.json · matrix.json</div></header>
 <section><h2>总览 <b>OVERVIEW</b></h2>{kpis}</section>
+<section><h2>模型与执行器 <b>MODEL / WORKER USAGE</b></h2>
+<p class="dim">按来源分别统计，跨来源可能是同一次执行；已知 token 为部分合计，未知次数单列。缺少 attemptId 的历史记录无法去重。host-guard 是观测快照，不含后续消耗；模型为执行记录声明，不推断实际供应商账单。</p>
+{notes_html}
+<table><tr><th>来源</th><th>执行器</th><th>角色</th><th>模型</th><th>尝试/记录</th><th>已知 token</th><th>用量未知</th></tr>{model_rows}</table></section>
+<section><h2>任务与执行 <b>TASK / ASSIGNMENT</b>（按来源顺序最多 200 条）</h2><table><tr><th>来源</th><th>任务</th><th>尝试</th><th>执行器</th><th>角色</th><th>模型</th><th>状态</th><th>token</th><th>模型调用</th></tr>{task_rows}</table></section>
 <section><h2>订阅使用量 <b>SUBSCRIPTION USAGE</b></h2><div class="subs">{subs_html}</div></section>
 <section><h2>执行器池 <b>EXECUTOR POOL</b></h2>
-<table><tr><th>执行器</th><th>层</th><th>订阅</th><th>状态</th><th>今日/上限</th><th>成功率</th><th>累计</th><th>最近</th></tr>{pool_html}</table></section>
+<table><tr><th>执行器</th><th>层</th><th>订阅</th><th>状态</th><th>今日记录</th><th>记录成功率</th><th>记录数</th><th>最近</th></tr>{pool_html}</table></section>
 <section><h2>任务看板 <b>TASK BOARD</b>（{len(matrix)} 项）</h2><div class="board">{board_html}</div></section>
 <section><h2>派工流水 <b>RECENT DISPATCHES</b></h2>
 <table><tr><th>时间</th><th>任务</th><th>执行器</th><th>角色</th><th>结果</th></tr>{flow_html}</table></section>
-<footer>regenerate：python3 -B -m crew dashboard --ledger &lt;crew-usage.jsonl&gt; --registry &lt;executors.json&gt; --health &lt;crew-health.json&gt; --matrix &lt;matrix.json&gt; --out &lt;this.html&gt;<br>
+<footer>regenerate：nuwax-forge dashboard --ledger &lt;crew-usage.jsonl&gt; --registry &lt;executors.json&gt; --out &lt;this.html&gt;<br>
 边界：本页只读聚合本地状态；不含密钥；由工作台按进度汇总周期重新生成。</footer>
 </div></body></html>"""
 
 
-def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list) -> str:
+def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list, records=None, notes=None) -> str:
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
-    page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at)
+    page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at, records=records, notes=notes)
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(page, encoding="utf-8")

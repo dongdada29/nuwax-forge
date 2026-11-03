@@ -26,3 +26,5 @@ state 必须在目标 Git 根和安装版目录之外，且是不存在的新目
 ```
 
 DSH 改 runtime 为 `{"kind":"deepseek-harness","contextMode":"fresh-exec","provider":"deepseek-official","model":"deepseek-flash"}`。认证仅由执行环境和客户端处理；Skill/安装器不读取或复制真实凭据。未获授权时只 doctor/prepare，不 run。run 一次性、无自动重试；reconcile 离线复核本次 JSONL，不能拿 exit 0 代替预算及产品验收。
+
+要查看这次 state 与 Crew/Stack 的任务、角色和模型分布，按需读 [dashboard.md](dashboard.md)。Agent state 只覆盖显式提供的运行，宿主 Router 的快照需另行提供，且不同来源不可直接加总。

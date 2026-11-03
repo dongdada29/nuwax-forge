@@ -12,9 +12,11 @@ import { runGui } from '../lib/gui.mjs';
 import { runBudget } from '../lib/budget/cli.mjs';
 import { runAgent } from '../lib/agent/index.mjs';
 import { runPlan } from '../lib/run.mjs';
+import { runDashboard } from '../lib/dashboard.mjs';
 import { parseArgs, UsageError, USAGE } from '../lib/args.mjs';
 
 const COMMANDS = {
+  dashboard: { flags: { ledger: 'value', registry: 'value', health: 'value', matrix: 'value', 'task-store': 'value', 'agent-state': 'value', 'agent-state-root': 'value', 'host-budget': 'value', out: 'value', serve: 'boolean', port: 'value', 'refresh-seconds': 'value', python: 'value' }, run: runDashboard },
   stack: { subcommands: ['module', 'runtime', 'task-state', 'ledger', 'im-mentions', 'append-record', 'commit-attribution'], flags: { name: 'value', command: 'value', profile: 'value', input: 'value', dns: 'value', owner: 'value', action: 'value', seconds: 'value' }, run: runStack },
   agent: { subcommands: ['doctor', 'prepare', 'run', 'reconcile'],
     flags: { runtime: 'value', binary: 'value', spec: 'value', state: 'value', 'brief-file': 'value', json: 'boolean' }, run: runAgent },

@@ -4,7 +4,9 @@ export class UsageError extends Error {}
 export const USAGE = `用法：
   nuwax-forge stack module --name <runtime-guard|triage|autonomous-run|...>
   nuwax-forge stack runtime --command <check|lease|context|backoff|dispatch|record> --profile <profile.json> [--input <JSON>]
+  nuwax-forge stack task-state --command <trigger-record|trigger-read|ticket-admit|ticket-read|assignment-prepare|assignment-start|assignment-report|assignment-finish> --input <JSON 文件>
   nuwax-forge help
+  nuwax-forge dashboard --ledger <JSONL> --registry <JSON> (--out <HTML> | --serve) [--port <0..65535>] [--refresh-seconds <5..3600>] [--health <JSON>] [--matrix <JSON>] [--task-store <tasks.sqlite>] [--agent-state <state目录>] [--agent-state-root <目录>] [--host-budget <guard.json>] [--python <解释器>]
   nuwax-forge doctor [--json]
   nuwax-forge agent doctor --runtime <codex|deepseek-harness> [--binary <可信绝对路径>] --json
   nuwax-forge agent prepare --spec <agent JSON> --brief-file <短任务书> --state <新仓外目录>
@@ -29,10 +31,13 @@ export const USAGE = `用法：
                             [--marker <起点标记文本>] [--parent-id <宿主线程 id>] --json
 
 说明：
+  dashboard  从显式本地数据生成 HTML；--serve 前台只监听 127.0.0.1，页面按访问读取最新数据；未知实耗单列。
   doctor  检查 Node>=22 / Python>=3.10 与 5 个包绑定，不联网、不改全局；有问题退出非 0。
   init    显式 opt-in：调用 nuwa-sdlc-kit verify:init 接线 verification，保留既有 hook/profile。
   verify  调用本包 stack 的 run_verification.py（crew-root 为同安装的 @nuwax-ai/devkit-crew）。
           state 强制在项目仓之外。桥接 JSON 透传；进程 exit 0 不等于产品验收通过。
+  stack task-state  单次本机 SQLite Trigger/Ticket/Assignment 记账；只读写状态，不执行 argv、模型或平台操作。
+                    输入是至多 64 KiB JSON 文件，含仓外 stateDirectory 与 repoRoot；授权字段仅作本机记录。
   client-verify  固定 client source-tooling 配方，新鲜执行并输出短 JSON；完整日志位于 state。
   run     显式执行 crew plan。mode=model/modelTask=true 的任务必须有 budgetSpec 和
           budget.maxTokens；HIGH 超限/预测 unknown 在 spawn 前 blocked。步间未知实耗
