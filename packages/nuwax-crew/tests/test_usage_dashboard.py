@@ -48,6 +48,22 @@ class UsageTests(unittest.TestCase):
 
 
 class DashboardTests(unittest.TestCase):
+    def test_charts_keep_crew_status_scope_and_show_empty_days(self):
+        entries = rows(("2026-10-23T01:00:00+00:00", "a", "codex", "dispatched"),
+                       ("2026-10-23T02:00:00+00:00", "a", "codex", "success"))
+        data = usage.aggregate(entries, REG, today="2026-10-23")
+        records = [
+            {"source": "crew", "taskKey": "a", "executor": "codex", "role": "worker", "status": "success"},
+            {"source": "host-guard", "taskKey": "b", "executor": "codex", "role": "router", "status": "unknown"},
+            {"source": "host-guard", "taskKey": "b", "executor": "worker<x>", "role": "worker", "status": "failed"},
+        ]
+        page = dashboard.build_html(data, REG, {}, [], entries, generated_at="test", records=records)
+        self.assertIn('Crew 状态分布，共 1 条尝试记录', page)
+        self.assertIn('2026-10-23：2 条台账记录', page)
+        self.assertIn('2026-10-22：0 条台账记录', page)
+        self.assertIn('worker&lt;x&gt;', page)
+        self.assertNotIn('worker<x>', page)
+
     def test_write_dashboard_contains_sections_and_escapes(self):
         matrix = [{"key": "NW-1", "title": "**待分诊**条目 <x>", "status": "pending-triage", "evidence": "e"},
                   {"key": "NW-2", "title": "已完成", "status": "done-verified-web", "evidence": "e2"}]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import html
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from . import unified_dashboard
 
@@ -80,6 +80,39 @@ footer{color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding-
 .summary-card h3{font-size:13px;margin-bottom:10px}.summary-card p{color:var(--dim);font-size:12px;margin-bottom:8px}
 .summary-list{list-style:none}.summary-list li{border-top:1px solid var(--line);padding:7px 0;overflow-wrap:anywhere}
 @media(max-width:700px){body{padding:14px}.board{display:block}.col{margin-bottom:8px}table{display:block;overflow-x:auto}.bar-row{grid-template-columns:120px 1fr 35px}}
+/* Dashboard visual language: all graphics are local HTML/CSS, no external assets. */
+:root{--bg:#0b101b;--panel:#141d2b;--line:#29374a;--ink:#e7edf6;--dim:#9aaac0;--amber:#f3bf63;--green:#55d9aa;--red:#ff7c82;--blue:#68b6fa;--violet:#b9a1ff}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:radial-gradient(ellipse at 75% -15%,#1c3450 0,transparent 50%),var(--bg);line-height:1.55}
+.wrap{max-width:1520px}header{align-items:center;border-color:#2a394d;padding-bottom:18px}
+h1{font-size:22px;letter-spacing:.01em;color:var(--ink)}h1 .tag{color:var(--amber);letter-spacing:.05em;font-size:13px}
+h2{font-size:14px;letter-spacing:.09em}.meta{line-height:1.7}
+.kpis{gap:12px}.kpi,.summary-card,.sub{border-radius:12px;background:linear-gradient(145deg,#172234,#121b29);box-shadow:0 8px 24px #0002}
+.kpi{padding:17px 18px}.kpi .n{font-size:28px;line-height:1.2}.kpi .l{font-size:12px;letter-spacing:.02em;margin-top:8px}
+.view-nav{gap:8px}.view-nav button,.pager button,.live-controls button{border-radius:8px;transition:border-color .15s,color .15s,background .15s}
+.view-nav button:hover,.pager button:hover,.live-controls button:hover{border-color:var(--blue);color:var(--ink)}
+.view-nav button[aria-pressed=true]{background:#3a3020;border-color:#80653f;color:#ffe0a0}
+.live-controls button{background:#233a50}.live-controls{gap:14px}
+.summary-grid{grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
+.summary-card{padding:19px;grid-column:span 4}.summary-card.wide{grid-column:span 8}
+.summary-card h3{font-size:15px;color:var(--ink);margin-bottom:5px}.summary-card p{line-height:1.6;margin-bottom:15px}
+.chart-label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px}
+.bar-row{grid-template-columns:minmax(115px,180px) 1fr 36px;gap:12px;margin:11px 0}.bar-row span{overflow-wrap:anywhere}
+.bar-track{background:#26354a;border-radius:20px;height:9px;overflow:hidden}.bar-fill{background:linear-gradient(90deg,#5e9df5,#70ded2);border-radius:20px;min-width:2px}
+.donut-layout{display:flex;align-items:center;gap:24px;flex-wrap:wrap}.donut{width:148px;height:148px;position:relative;border-radius:50%;flex:none}
+.donut:after{content:'';position:absolute;inset:19px;border-radius:50%;background:#151f2e}.donut-center{position:absolute;inset:0;z-index:1;display:grid;place-content:center;text-align:center;color:var(--dim);font-size:11px}
+.donut-center b{color:var(--ink);font-size:27px;line-height:1.1}.legend{flex:1;min-width:125px;list-style:none}
+.legend li{display:flex;align-items:center;gap:8px;padding:5px 0;color:var(--dim);font-size:12px}.legend b{margin-left:auto;color:var(--ink)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
+.trend{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;height:155px;align-items:end;border-bottom:1px solid var(--line)}
+.trend-col{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;min-width:0}
+.trend-count{font-size:11px;color:var(--ink)}.trend-bar{width:min(75%,40px);height:calc(var(--pct) * 1%);min-height:2px;background:linear-gradient(0deg,#5888e5,#71d9d2);border-radius:5px 5px 0 0}
+.trend-day{color:var(--dim);font-size:11px;padding-bottom:2px}.trend-zero{background:#344358}
+.summary-list li{padding:9px 0}.route-list{list-style:none}.route-list li{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding:10px 0;min-width:0}
+.route-node{background:#23344a;border:1px solid #334b64;border-radius:7px;padding:4px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:44%}
+.route-node.unknown{color:var(--dim);background:#202838;border-color:#344154}.route-count{color:var(--dim);margin-left:auto;white-space:nowrap;font-size:11px}
+table{border-radius:10px;overflow:hidden}th{background:#1a2637}
+@media(max-width:1000px){.summary-card,.summary-card.wide{grid-column:span 6}}
+@media(max-width:650px){.summary-card,.summary-card.wide{grid-column:span 12}.donut{width:128px;height:128px}.summary-grid{gap:10px}.bar-row{grid-template-columns:110px 1fr 30px}header{align-items:flex-start;gap:10px}.meta{max-width:55%}}
 """
 
 
@@ -125,7 +158,7 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
     <div class="kpis">
       <div class="kpi"><div class="n">{total}</div><div class="l">台账记录</div></div>
       <div class="kpi good"><div class="n">{ok_rate}</div><div class="l">记录成功率</div></div>
-      <div class="kpi hot"><div class="n">{len(active)}</div><div class="l">可用执行器</div></div>
+      <div class="kpi hot"><div class="n">{len(active)}</div><div class="l">已启用且未冷却</div></div>
       <div class="kpi {'bad' if health else ''}"><div class="n">{len(health)}</div><div class="l">冷却中</div></div>
       <div class="kpi"><div class="n">{len(matrix)}</div><div class="l">看板条目</div></div>
       <div class="kpi bad"><div class="n">{failed}</div><div class="l">失败记录数</div></div>
@@ -192,11 +225,12 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
         f"<td>{esc(r.get('status') or 'unknown')}</td><td>{esc(r.get('tokens') if r.get('tokens') is not None else 'unknown')}</td>"
         f"<td>{esc(r.get('modelCalls') if r.get('modelCalls') is not None else 'unknown')}</td></tr>"
         for r in records[-200:][::-1]) or '<tr><td colspan="9">暂无记录</td></tr>'
+    edges = unified_dashboard.route_edges(records)
     route_rows = ''.join(
         f"<tr><td>{esc(e['source'])}</td><td>{esc(e['router'])}<span class='route-arrow'>→</span>{esc(e['worker'])}</td>"
         f"<td>{esc(e['role'])}</td><td>{esc(e['model'])}</td><td>{e['count']}</td>"
         f"<td>{esc('、'.join(sorted(e['tasks'])[:8]))}{'…' if len(e['tasks']) > 8 else ''}</td></tr>"
-        for e in unified_dashboard.route_edges(records)) or '<tr><td colspan="6">暂无路由记录</td></tr>'
+        for e in edges) or '<tr><td colspan="6">暂无路由记录</td></tr>'
     chart_groups = {}
     for r in records:
         key = (r.get('source') or 'unknown', r.get('executor') or 'unknown')
@@ -207,6 +241,46 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
         f'<div class="bar-row"><span>{esc(source)} / {esc(executor)}</span>'
         f'<div class="bar-track"><div class="bar-fill" style="width:{count / chart_max * 100:.1f}%"></div></div><b>{count}</b></div>'
         for (source, executor), count in chart_items) or '<p class="dim">暂无执行记录</p>'
+    # Crew events are grouped into attempts above; never combine them with
+    # independent Stack, host-guard or Forge observations in this chart.
+    crew_records = [r for r in records if r.get('source') == 'crew']
+    status_groups = [
+        ('已完成', '#55d9aa', {'completed', 'success'}),
+        ('失败', '#ff7c82', {'failed'}),
+        ('派工/进行中', '#68b6fa', {'dispatched', 'running', 'in_progress', 'claimed'}),
+        ('其他', '#b9a1ff', None),
+    ]
+    status_counts = [sum(1 for r in crew_records if r.get('status') in statuses)
+                     for _, _, statuses in status_groups[:3]]
+    status_counts.append(len(crew_records) - sum(status_counts))
+    stops, position = [], 0.0
+    for (_, color, _), count in zip(status_groups, status_counts):
+        end = position + count / len(crew_records) * 100 if crew_records else 0
+        if count:
+            stops.append(f'{color} {position:.4f}% {end:.4f}%')
+        position = end
+    donut_fill = f"conic-gradient({', '.join(stops)})" if stops else '#29374a'
+    legend = ''.join(f'<li><span class="dot" style="--c:{color}"></span>{esc(label)}<b>{count}</b></li>'
+                     for (label, color, _), count in zip(status_groups, status_counts))
+    status_chart = (f'<div class="donut-layout"><div class="donut" role="img" '
+                    f'aria-label="Crew 状态分布，共 {len(crew_records)} 条尝试记录" style="background:{donut_fill}">'
+                    f'<div class="donut-center"><b>{len(crew_records)}</b>尝试记录</div></div><ul class="legend">{legend}</ul></div>')
+
+    today = date.fromisoformat(usage['today'])
+    days = [today - timedelta(days=n) for n in reversed(range(7))]
+    day_counts = [sum(usage.get('perDay', {}).get(day.isoformat(), {}).values()) for day in days]
+    day_max = max(day_counts, default=0) or 1
+    trend_html = ''.join(
+        f'<div class="trend-col" title="{day.isoformat()}：{count} 条台账记录">'
+        f'<span class="trend-count">{count}</span><div class="trend-bar {"trend-zero" if not count else ""}" '
+        f'style="--pct:{count / day_max * 75:.2f}"></div><span class="trend-day">{day.strftime("%m/%d")}</span></div>'
+        for day, count in zip(days, day_counts))
+    route_preview = ''.join(
+        f'<li><span class="route-node {"unknown" if e["router"] == "未记录" else ""}">{esc(e["router"])}</span>'
+        f'<span class="route-arrow">→</span><span class="route-node">{esc(e["worker"])}</span>'
+        f'<span class="route-count">{esc(e["source"])} · {e["count"]} 条</span></li>'
+        for e in sorted(edges, key=lambda item: (-item['count'], item['source'], item['router'], item['worker']))[:5]
+    ) or '<li class="dim">暂无路由记录</li>'
     ongoing = [r for r in records if r.get('status') in ('dispatched', 'running', 'in_progress', 'claimed')]
     ongoing_html = ''.join(
         f'<li>{esc(r.get("taskKey") or "unknown")} · {esc(r.get("executor") or "unknown")} · {esc(r.get("status"))}</li>'
@@ -223,9 +297,12 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <div id="dashboard-content">
 <section data-view="overview"><h2>总览 <b>OVERVIEW</b></h2>{kpis}</section>
 <section data-view="overview"><div class="summary-grid">
-<div class="summary-card"><h3>执行器记录分布</h3><p>各来源分别统计，条形长度按本图最大值缩放。</p>{chart_html}</div>
-<div class="summary-card"><h3>进行中记录 · {len(ongoing)}</h3><p>依据台账状态，未核验进程是否仍在运行。</p><ul class="summary-list">{ongoing_html}</ul></div>
-<div class="summary-card"><h3>最近派工</h3><ul class="summary-list">{recent_html}</ul></div>
+<div class="summary-card wide"><div class="chart-label">Activity · 7 days</div><h3>近七天派工活动</h3><p>以 UTC 当日为截止，按台账时间戳中的日期统计原始记录，包含派工和结果事件。</p><div class="trend" role="img" aria-label="近七天 Crew 台账记录数">{trend_html}</div></div>
+<div class="summary-card"><div class="chart-label">Attempt status</div><h3>任务状态分布</h3><p>仅统计 Crew 中可归并的尝试及无法归并的历史记录。</p>{status_chart}</div>
+<div class="summary-card"><div class="chart-label">Executors</div><h3>执行器记录分布</h3><p>各来源分别统计，条形按最大值缩放。</p>{chart_html}</div>
+<div class="summary-card"><div class="chart-label">Routing</div><h3>Router → Worker</h3><p>来源未记录 Router 身份时显示“未记录”。</p><ul class="route-list">{route_preview}</ul></div>
+<div class="summary-card"><div class="chart-label">In progress</div><h3>进行中记录 · {len(ongoing)}</h3><p>依据台账状态，未核验进程是否仍在运行。</p><ul class="summary-list">{ongoing_html}</ul></div>
+<div class="summary-card wide"><div class="chart-label">Recent dispatches</div><h3>最近派工</h3><ul class="summary-list">{recent_html}</ul></div>
 </div></section>
 <section data-view="routes"><h2>路由关系 <b>ROUTER → WORKER</b></h2>
 <p class="dim">仅 host-guard 记录明确的宿主到 Worker 关联；其他来源的 Router 身份未记录，不能据此推断具体路由者。记录数按来源分开，不跨来源合并。</p>
