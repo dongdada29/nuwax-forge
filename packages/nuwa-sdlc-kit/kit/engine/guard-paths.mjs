@@ -17,8 +17,8 @@ process.stdin.on('end', () => {
 
   const tool = ev.tool_name ?? '';
   const ti = ev.tool_input ?? {};
-  // ZCode 事件可能不带 cwd：模板变量 ${ZCODE_PROJECT_DIR} 会以环境变量注入（Claude 同理），作兜底
-  const cwd = ev.cwd || process.env.ZCODE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  // ZCode/Codex 事件可能不带 cwd：模板变量会以环境变量注入（Claude 同理），作兜底
+  const cwd = ev.cwd || process.env.CODEX_PROJECT_DIR || process.env.ZCODE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const cfg = loadCfg(cwd);
   const reason = msg => { console.error(msg); process.exit(2); };
 
