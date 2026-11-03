@@ -125,11 +125,15 @@ class UnifiedDashboardTests(unittest.TestCase):
                     self.assertIn('crew-task', page)
                     self.assertIn('立即刷新', page)
                     self.assertIn('路由关系', page)
+                    self.assertIn('运行总览', page)
+                    self.assertIn('data-paginate="tasks"', page)
                     self.assertIn('host-thread', page)
                     self.assertIn('派工台账最后写入', page)
                     self.assertIn("script-src 'self'", response.headers['Content-Security-Policy'])
                 with urllib.request.urlopen(url + 'live.js', timeout=5) as response:
-                    self.assertIn('setInterval', response.read().decode())
+                    script = response.read().decode()
+                    self.assertIn('setInterval', script)
+                    self.assertIn('renderView', script)
                 with ledger.open('a') as stream:
                     stream.write(json.dumps({'taskKey':'new-task', 'attemptId':'next', 'executor':'codex', 'role':'worker', 'status':'dispatched'})+'\n')
                 with urllib.request.urlopen(url, timeout=5) as response:

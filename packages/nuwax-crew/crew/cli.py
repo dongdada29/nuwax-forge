@@ -180,7 +180,13 @@ def cmd_dashboard_server(args) -> int:
             controls = (f'<div class="live-controls" data-interval="{args.refresh_seconds}">'
                         f'<button type="button" id="refresh-now">立即刷新</button>'
                         f'<span id="refresh-status" role="status">自动刷新：每 {args.refresh_seconds} 秒</span>'
-                        f'<span id="source-time">派工台账最后写入：{source_time}</span></div>')
+                        f'<span id="source-time">派工台账最后写入：{source_time}</span></div>'
+                        '<nav class="view-nav" aria-label="看板视图">'
+                        '<button type="button" data-target="overview">运行总览</button>'
+                        '<button type="button" data-target="routes">路由关系</button>'
+                        '<button type="button" data-target="tasks">任务详情</button>'
+                        '<button type="button" data-target="models">模型与执行器</button>'
+                        '<button type="button" data-target="dispatch">派工流水</button></nav>')
             page = page.replace('<div id="dashboard-content">', controls + '<div id="dashboard-content">', 1)
             return page.replace('</body>', '<script src="/live.js" defer></script></body>', 1).encode('utf-8')
 
@@ -190,6 +196,38 @@ def cmd_dashboard_server(args) -> int:
   const status = document.querySelector('#refresh-status');
   const interval = Number(controls.dataset.interval);
   let busy = false;
+  let view = 'overview';
+  const pages = {};
+  function renderView() {
+    document.querySelectorAll('.view-nav button').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.target === view));
+    });
+    document.querySelectorAll('#dashboard-content section[data-view]').forEach(section => {
+      section.hidden = section.dataset.view !== view;
+    });
+    document.querySelectorAll('#dashboard-content table[data-paginate]').forEach(table => {
+      const key = table.dataset.paginate;
+      const rows = [...table.querySelectorAll('tr')].filter(row => row.querySelector('td'));
+      const total = Math.max(1, Math.ceil(rows.length / 10));
+      pages[key] = Math.min(Math.max(pages[key] || 1, 1), total);
+      rows.forEach((row, i) => { row.hidden = Math.floor(i / 10) + 1 !== pages[key]; });
+      table.parentElement.querySelectorAll('.pager').forEach(element => element.remove());
+      if (rows.length <= 10) return;
+      const pager = document.createElement('div'); pager.className = 'pager';
+      const previous = document.createElement('button'); previous.type = 'button'; previous.textContent = '上一页';
+      previous.disabled = pages[key] === 1;
+      previous.addEventListener('click', () => { pages[key]--; renderView(); });
+      const label = document.createElement('span'); label.textContent = `第 ${pages[key]} / ${total} 页 · ${rows.length} 条`;
+      const next = document.createElement('button'); next.type = 'button'; next.textContent = '下一页';
+      next.disabled = pages[key] === total;
+      next.addEventListener('click', () => { pages[key]++; renderView(); });
+      pager.append(previous, label, next); table.insertAdjacentElement('afterend', pager);
+    });
+  }
+  document.querySelectorAll('.view-nav button').forEach(button => button.addEventListener('click', () => {
+    view = button.dataset.target; renderView();
+  }));
+  renderView();
   async function refresh() {
     if (busy) return;
     busy = true; button.disabled = true; status.textContent = '正在刷新…';
@@ -206,6 +244,7 @@ def cmd_dashboard_server(args) -> int:
       document.querySelector('#dashboard-content').innerHTML = content.innerHTML;
       document.querySelector('.meta').innerHTML = meta.innerHTML;
       document.querySelector('#source-time').textContent = source.textContent;
+      renderView();
       status.textContent = '已更新 ' + new Date().toLocaleTimeString() + ' · 每 ' + interval + ' 秒自动刷新';
     } catch (_) {
       status.textContent = '刷新失败，保留上次数据；将自动重试';
