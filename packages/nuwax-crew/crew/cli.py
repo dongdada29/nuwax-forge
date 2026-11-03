@@ -151,9 +151,11 @@ def cmd_dashboard_server(args) -> int:
     """Explicit foreground server; regenerate only on local requests."""
     import contextlib
     import copy
+    import html
     import io
     import tempfile
     import threading
+    from datetime import datetime
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from pathlib import Path
 
@@ -170,25 +172,66 @@ def cmd_dashboard_server(args) -> int:
             with lock, contextlib.redirect_stdout(io.StringIO()):
                 cmd_dashboard(snapshot)
                 page = Path(snapshot.out).read_text(encoding='utf-8')
-            return page.replace('<head>', f'<head><meta http-equiv="refresh" content="{args.refresh_seconds}">', 1).encode('utf-8')
+            def modified(path):
+                p = Path(path)
+                stamps = [f.stat().st_mtime for f in (p, Path(str(p) + '-wal')) if f.exists()]
+                return datetime.fromtimestamp(max(stamps)).astimezone().strftime('%Y-%m-%d %H:%M:%S') if stamps else '文件不存在'
+            source_time = html.escape(modified(args.ledger))
+            controls = (f'<div class="live-controls" data-interval="{args.refresh_seconds}">'
+                        f'<button type="button" id="refresh-now">立即刷新</button>'
+                        f'<span id="refresh-status" role="status">自动刷新：每 {args.refresh_seconds} 秒</span>'
+                        f'<span id="source-time">派工台账最后写入：{source_time}</span></div>')
+            page = page.replace('<div id="dashboard-content">', controls + '<div id="dashboard-content">', 1)
+            return page.replace('</body>', '<script src="/live.js" defer></script></body>', 1).encode('utf-8')
+
+        live_script = '''(() => {
+  const controls = document.querySelector('.live-controls');
+  const button = document.querySelector('#refresh-now');
+  const status = document.querySelector('#refresh-status');
+  const interval = Number(controls.dataset.interval);
+  let busy = false;
+  async function refresh() {
+    if (busy) return;
+    busy = true; button.disabled = true; status.textContent = '正在刷新…';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch('/', {cache:'no-store', signal:controller.signal});
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const next = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const content = next.querySelector('#dashboard-content');
+      const meta = next.querySelector('.meta');
+      const source = next.querySelector('#source-time');
+      if (!content || !meta || !source) throw new Error('invalid response');
+      document.querySelector('#dashboard-content').innerHTML = content.innerHTML;
+      document.querySelector('.meta').innerHTML = meta.innerHTML;
+      document.querySelector('#source-time').textContent = source.textContent;
+      status.textContent = '已更新 ' + new Date().toLocaleTimeString() + ' · 每 ' + interval + ' 秒自动刷新';
+    } catch (_) {
+      status.textContent = '刷新失败，保留上次数据；将自动重试';
+    } finally { clearTimeout(timeout); busy = false; button.disabled = false; }
+  }
+  button.addEventListener('click', refresh);
+  setInterval(refresh, interval * 1000);
+})();'''.encode('utf-8')
 
         render()  # Fail before listening if an explicit source is invalid.
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
-                if self.path not in ('/', '/index.html'):
+                if self.path not in ('/', '/index.html', '/live.js'):
                     self.send_error(404)
                     return
                 try:
-                    content = render()
+                    content = live_script if self.path == '/live.js' else render()
                 except (OSError, ValueError, sqlite3.Error):
                     self.send_error(503, 'Dashboard source unavailable')
                     return
                 self.send_response(200)
-                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Type', 'application/javascript; charset=utf-8' if self.path == '/live.js' else 'text/html; charset=utf-8')
                 self.send_header('Cache-Control', 'no-store')
                 self.send_header('X-Content-Type-Options', 'nosniff')
-                self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+                self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
                 self.send_header('Content-Length', str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
@@ -273,7 +316,7 @@ def main(argv=None) -> int:
     p.add_argument("--out")
     p.add_argument("--serve", action="store_true", help="前台监听本机并按访问刷新")
     p.add_argument("--port", type=int, default=0)
-    p.add_argument("--refresh-seconds", type=int, default=30)
+    p.add_argument("--refresh-seconds", type=int, default=5)
     p.set_defaults(func=lambda args: cmd_dashboard_server(args) if args.serve else cmd_dashboard(args))
 
     args = parser.parse_args(argv)

@@ -73,4 +73,4 @@ nuwax-forge dashboard --ledger /path/crew-usage.jsonl --registry /path/executors
 
 按来源、执行器、角色和声明模型展示任务与用量。Crew 同一尝试的派工及结果事件按 attempt/step 关联；没有 attemptId 的历史记录无法可靠去重。不同来源可能记录同一次执行，分别显示，不作跨来源总和。未知 token 和模型调用数显示 unknown，已知的 0 保留为 0；模型名是运行声明，不代表供应商账单或完整宿主消耗。host-budget 的任务列是宿主会话 ID，快照不含之后的消耗；看板不会自动发现其他主机会话，静态页面不会自动发布或刷新。
 
-需要持续观察时，将 `--out` 换成 `--serve --port 0 --refresh-seconds 30`。该命令前台监听 `127.0.0.1`，输出 URL；页面请求时重新读取已指定来源，浏览器按间隔刷新。快照输入（例如 host-budget）只有文件本身更新才变化。结束前台进程即可关闭。
+需要持续观察时，将 `--out` 换成 `--serve --port 0 --refresh-seconds 5`。该命令前台监听 `127.0.0.1`，输出 URL；页面按间隔读取已指定来源，也可手动刷新，并显示台账最后写入时间。快照输入（例如 host-budget）只有文件本身更新才变化。路由关系只展示来源中有证据的关联，Router 身份缺失时显示未记录。结束前台进程即可关闭。

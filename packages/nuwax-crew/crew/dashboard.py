@@ -63,6 +63,10 @@ footer{color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding-
 .badge.S{color:var(--amber);border-color:var(--amber)}.badge.A{color:var(--blue);border-color:var(--blue)}
 .badge.B{color:var(--green);border-color:var(--green)}.badge.C{color:var(--violet);border-color:var(--violet)}
 .badge.fixed{color:var(--dim)}
+.live-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:-8px 0 20px;color:var(--dim);font-size:12px}
+.live-controls button{background:var(--panel);border:1px solid var(--blue);color:var(--ink);padding:6px 12px;cursor:pointer}
+.live-controls button:disabled{opacity:.5;cursor:wait}
+.route-arrow{color:var(--amber);padding:0 8px}
 """
 
 
@@ -175,13 +179,22 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
         f"<td>{esc(r.get('status') or 'unknown')}</td><td>{esc(r.get('tokens') if r.get('tokens') is not None else 'unknown')}</td>"
         f"<td>{esc(r.get('modelCalls') if r.get('modelCalls') is not None else 'unknown')}</td></tr>"
         for r in records[-200:][::-1]) or '<tr><td colspan="9">暂无记录</td></tr>'
+    route_rows = ''.join(
+        f"<tr><td>{esc(e['source'])}</td><td>{esc(e['router'])}<span class='route-arrow'>→</span>{esc(e['worker'])}</td>"
+        f"<td>{esc(e['role'])}</td><td>{esc(e['model'])}</td><td>{e['count']}</td>"
+        f"<td>{esc('、'.join(sorted(e['tasks'])[:8]))}{'…' if len(e['tasks']) > 8 else ''}</td></tr>"
+        for e in unified_dashboard.route_edges(records)) or '<tr><td colspan="6">暂无路由记录</td></tr>'
 
     return f"""<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>nuwax-crew 运行看板</title><style>{CSS}</style></head>
 <body><div class="wrap">
 <header><h1>nuwax-crew <span class="tag">// 运行看板</span></h1>
 <div class="meta">生成于 {esc(generated_at)}<br>数据：executors.json · crew-usage.jsonl · crew-health.json · matrix.json</div></header>
+<div id="dashboard-content">
 <section><h2>总览 <b>OVERVIEW</b></h2>{kpis}</section>
+<section><h2>路由关系 <b>ROUTER → WORKER</b></h2>
+<p class="dim">仅 host-guard 记录明确的宿主到 Worker 关联；其他来源的 Router 身份未记录，不能据此推断具体路由者。记录数按来源分开，不跨来源合并。</p>
+<table><tr><th>来源</th><th>Router → Worker</th><th>角色</th><th>模型</th><th>记录</th><th>任务</th></tr>{route_rows}</table></section>
 <section><h2>模型与执行器 <b>MODEL / WORKER USAGE</b></h2>
 <p class="dim">按来源分别统计，跨来源可能是同一次执行；已知 token 为部分合计，未知次数单列。缺少 attemptId 的历史记录无法去重。host-guard 是观测快照，不含后续消耗；模型为执行记录声明，不推断实际供应商账单。</p>
 {notes_html}
@@ -195,11 +208,11 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <table><tr><th>时间</th><th>任务</th><th>执行器</th><th>角色</th><th>结果</th></tr>{flow_html}</table></section>
 <footer>regenerate：nuwax-forge dashboard --ledger &lt;crew-usage.jsonl&gt; --registry &lt;executors.json&gt; --out &lt;this.html&gt;<br>
 边界：本页只读聚合本地状态；不含密钥；由工作台按进度汇总周期重新生成。</footer>
-</div></body></html>"""
+</div></div></body></html>"""
 
 
 def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list, records=None, notes=None) -> str:
-    generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
+    generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
     page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at, records=records, notes=notes)
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)

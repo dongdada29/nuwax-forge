@@ -113,3 +113,27 @@ def summarize(records):
             item['knownCount'] += 1
             item['knownTokens'] += r['tokens']
     return sorted(groups.values(), key=lambda x: (x['source'], x['executor'], x['role'], x['model']))
+
+
+def route_edges(records):
+    """Only host-guard explicitly links its workers to the host thread.
+
+    Other sources record an assignment but not the identity of its router.
+    Never infer a parent from a shared task name across independent sources.
+    """
+    routers = {r.get('taskKey'): r for r in records
+               if r.get('source') == 'host-guard' and r.get('role') == 'router' and r.get('taskKey')}
+    edges = {}
+    for r in records:
+        if r.get('role') == 'router':
+            continue
+        router = routers.get(r.get('taskKey')) if r.get('source') == 'host-guard' else None
+        parent = (router.get('attemptId') or router.get('executor') or 'unknown') if router else '未记录'
+        key = (r.get('source') or 'unknown', parent, r.get('executor') or 'unknown',
+               r.get('role') or 'unknown', r.get('model') or 'unknown')
+        edge = edges.setdefault(key, {'source': key[0], 'router': key[1], 'worker': key[2],
+                                      'role': key[3], 'model': key[4], 'count': 0, 'tasks': set()})
+        edge['count'] += 1
+        if r.get('taskKey'):
+            edge['tasks'].add(str(r['taskKey']))
+    return sorted(edges.values(), key=lambda e: (e['source'], e['router'], e['worker'], e['role'], e['model']))

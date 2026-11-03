@@ -52,6 +52,17 @@ class UnifiedDashboardTests(unittest.TestCase):
         self.assertEqual(len(records), 2)
         self.assertEqual([r['tokens'] for r in records], [1, 2])
 
+    def test_route_edges_only_link_explicit_host_workers(self):
+        rows = [
+            {'source': 'host-guard', 'taskKey': 't', 'attemptId': 'host-1', 'role': 'router', 'executor': 'codex'},
+            {'source': 'host-guard', 'taskKey': 't', 'role': 'worker', 'executor': 'agent-a', 'model': 'm'},
+            {'source': 'crew', 'taskKey': 't', 'role': 'review', 'executor': 'agent-b'},
+        ]
+        edges = u.route_edges(rows)
+        self.assertEqual([(x['source'], x['router'], x['worker']) for x in edges],
+                         [('crew', '未记录', 'agent-b'), ('host-guard', 'host-1', 'agent-a')])
+        self.assertEqual(edges[1]['tasks'], {'t'})
+
     @unittest.skipUnless(shutil.which('node'), 'Node required')
     def test_forge_dashboard_reads_three_sources_and_protects_inputs(self):
         with tempfile.TemporaryDirectory() as td:
@@ -110,7 +121,15 @@ class UnifiedDashboardTests(unittest.TestCase):
                 url = json.loads(process.stdout.readline())['url']
                 self.assertIn('127.0.0.1', url)
                 with urllib.request.urlopen(url, timeout=5) as response:
-                    self.assertIn('crew-task', response.read().decode())
+                    page = response.read().decode()
+                    self.assertIn('crew-task', page)
+                    self.assertIn('立即刷新', page)
+                    self.assertIn('路由关系', page)
+                    self.assertIn('host-thread', page)
+                    self.assertIn('派工台账最后写入', page)
+                    self.assertIn("script-src 'self'", response.headers['Content-Security-Policy'])
+                with urllib.request.urlopen(url + 'live.js', timeout=5) as response:
+                    self.assertIn('setInterval', response.read().decode())
                 with ledger.open('a') as stream:
                     stream.write(json.dumps({'taskKey':'new-task', 'attemptId':'next', 'executor':'codex', 'role':'worker', 'status':'dispatched'})+'\n')
                 with urllib.request.urlopen(url, timeout=5) as response:

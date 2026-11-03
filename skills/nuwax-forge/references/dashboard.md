@@ -17,7 +17,7 @@ node "$ENTRY" dashboard --ledger "$CREW_LEDGER" --registry "$CREW_REGISTRY" --ou
 
 上例的可选参数只在对应来源真实存在时传入。`--host-budget` 是独立产生的 guard JSON 快照；guard 的 `over` 或 `unknown` 不等于通过预算门。任务矩阵未提供时，原任务看板为空，但台账仍可显示任务键。
 
-用户需要持续观察时，将 `--out "$REPORT_HTML"` 换成 `--serve --port 0 --refresh-seconds 30`。命令前台运行，只监听 `127.0.0.1`，输出 JSON 中的 `url`；页面每 30 秒请求并重新读取指定来源。`port=0` 由系统分配端口，刷新间隔允许 5–3600 秒。停止前台进程即可关闭看板；host-budget 等输入文件本身是快照，除非其生产方更新，否则内容不会变化。
+用户需要持续观察时，将 `--out "$REPORT_HTML"` 换成 `--serve --port 0 --refresh-seconds 5`。命令前台运行，只监听 `127.0.0.1`，输出 JSON 中的 `url`；页面每 5 秒重新读取指定来源，也可点击“立即刷新”，并显示刷新结果与台账最后写入时间。`port=0` 由系统分配端口，刷新间隔允许 5–3600 秒。停止前台进程即可关闭看板；台账或 host-budget 等输入本身未更新时，刷新不会产生新记录。
 
 ## 如何解释结果
 
@@ -25,6 +25,7 @@ node "$ENTRY" dashboard --ledger "$CREW_LEDGER" --registry "$CREW_REGISTRY" --ou
 - Crew 同一 `taskKey + attemptId + executor + role + stepIndex` 的派工与终态归并；旧记录缺 `stepIndex` 时按同键顺序配对；缺 `attemptId` 无法可靠去重。历史计数区显示的是**台账记录数**，不是模型请求数。
 - Stack 来源读取 Assignment 当前行；旧任务库没有 `assignments` 表时显示未接入，不会迁移库。Forge agent state 仅在 `modelDispatched=true` 时计入，prepare/doctor 不计为调用。
 - `host-guard` 的 router/worker 消耗是指定时间窗的观测快照，不含快照之后的调用或最终回复尾部；其他宿主和未提供的运行不会自动出现。
+- 路由关系仅在 host-guard 明确提供宿主和 Worker 时展示具体关联；其他来源没有 Router 身份时显示“未记录”，不要根据任务名推测父子关系。
 - 未知 token 或调用数显示 `unknown`；真实 0 保留为 0。已知 token 是部分合计；跨来源可能表示同一次运行，**不能直接相加**。来源不全、授权未确认、快照不完整或缺失时，说明覆盖范围，不宣称总量、最终封账或预算通过。
 
 静态 HTML 需要显式重新生成。是否发布、分享或修改平台/安装配置仍取决于用户已授权的范围。
