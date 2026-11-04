@@ -1,0 +1,9 @@
+{
+  "name": "@nuwax-ai/ds-bot-forge-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Native DSH tools for explicit Forge status and bounded task preparation",
+  "exports": { ".": "./index.mjs", "./locale/*.json": "./locale/*.json", "./icon": "./icon.svg" },
+  "files": ["index.mjs", "bridge.mjs", "setup.mjs", "locale", "icon.svg"]
+}
