@@ -13,6 +13,7 @@ const result = spawnSync(process.execPath, [
   '--test',
   'packages/voice-duet/tests/pilot.test.mjs',
   'integrations/dsh-dashboard/test/client.test.mjs',
+  'integrations/ds-bot-forge/bridge.test.mjs',
 ], { cwd: root, env, shell: false, stdio: 'inherit' });
 
 if (result.error) {
