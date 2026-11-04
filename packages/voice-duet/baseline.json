@@ -1,0 +1,11 @@
+{
+  "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "NOTICE": "bd7601b4a8c2998c0cbe69d870d7b2a606832bd6f982794067289efaaeebfdde",
+  "HEROICONS-LICENSE.txt": "9b9d90158fe053830e4d96fc0c9842a0c9449541ce12938eacf4b328b268d5ed",
+  "package.json": "d4e630781061a8a8718d34031b74cfdce5262ad7c7a24ddb575005ef321f4981",
+  "src/host/plugin.mjs": "5dfe8a811930949220f2edbdcad05ee523195449636dbf143d912f1176c303c4",
+  "src/host/endpoint-discovery.mjs": "ee32cec23d7c01d69897bbd7042cc38f5bf20fc5a50db37de88355a8e3b57ac7",
+  "src/host/proxy.mjs": "ea9211b53c388e24cb49153c208e3ceeda88ec96000a308031e10c4c179b9a98",
+  "src/host/settings.mjs": "78f48b8909dc0f31f9bcf7016878210c2d028c0520d6cc31a5af4e8034cdad91",
+  "src/host/trace.mjs": "b492850b88ae1886ffe6ea8280876d9b6a15fd11ea1ffeeba67f94c9c97b6fad"
+}

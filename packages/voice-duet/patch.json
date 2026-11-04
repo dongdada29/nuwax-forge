@@ -1,0 +1,42 @@
+[
+  {
+    "file": "src/host/endpoint-discovery.mjs",
+    "old": "import {isIP} from 'node:net'",
+    "new": "// Modified for Forge pilot: enforce TLS on voice routes.\nimport {requireSecureEndpoint} from './forge-policy.mjs'\nimport {isIP} from 'node:net'"
+  },
+  {
+    "file": "src/host/endpoint-discovery.mjs",
+    "old": "  const url=new URL(endpoint)\n",
+    "new": "  const url=requireSecureEndpoint(endpoint)\n"
+  },
+  {
+    "file": "src/host/endpoint-discovery.mjs",
+    "old": "  url.pathname='/ws';url.search='?protocol=realtime_v2'",
+    "new": "  requireSecureEndpoint(url.toString())\n  url.pathname='/ws';url.search='?protocol=realtime_v2'"
+  },
+  {
+    "file": "src/host/endpoint-discovery.mjs",
+    "old": "  let fallbackReason=''\n  for(let i=0;i<routes.length;i++){",
+    "new": "  // Validate all candidates before opening any socket; do not downgrade on fallback.\n  for (const route of routes) requireSecureEndpoint(route.url)\n  let fallbackReason=''\n  for(let i=0;i<routes.length;i++){"
+  },
+  {
+    "file": "src/host/settings.mjs",
+    "old": "import { readFileSync } from 'node:fs'",
+    "new": "// Modified for Forge pilot: enforce TLS on voice settings.\nimport { requireSecureEndpoint } from './forge-policy.mjs'\nimport { readFileSync } from 'node:fs'"
+  },
+  {
+    "file": "src/host/settings.mjs",
+    "old": "  if (url.protocol === 'ws:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && url.origin !== insecureOrigin && !isPublicTrialEndpoint(url.toString())) throw new Error('backend_requires_wss')",
+    "new": "  requireSecureEndpoint(url.toString())"
+  },
+  {
+    "file": "src/host/proxy.mjs",
+    "old": "import { createRequire } from 'node:module'",
+    "new": "// Modified for Forge pilot: enforce TLS before registering the voice proxy.\nimport { requireSecureEndpoint } from './forge-policy.mjs'\nimport { createRequire } from 'node:module'"
+  },
+  {
+    "file": "src/host/proxy.mjs",
+    "old": "    if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password || url.hash) throw new Error('invalid_voice_endpoint')",
+    "new": "    if (!['ws:', 'wss:'].includes(url.protocol)) throw new Error('invalid_voice_endpoint')\n    requireSecureEndpoint(url.toString())"
+  }
+]
