@@ -6,10 +6,13 @@ import json
 import sqlite3
 import sys
 import socketserver
+from urllib.parse import urlsplit
 from http.server import ThreadingHTTPServer
 from crew import registry, usage
 from . import views
 from .adapters import default_adapters
+from . import sources
+from .workbench import source_health, timestamp
 
 
 class LoopbackServer(ThreadingHTTPServer):
@@ -21,10 +24,11 @@ class LoopbackServer(ThreadingHTTPServer):
 
 
 
-def cmd_dashboard(args) -> int:
+def load_dashboard(args):
     from pathlib import Path
     reg = registry.load(args.registry)
-    data = usage.summary(args.ledger, reg, days=7)
+    rows = usage.load_rows(args.ledger)
+    data = usage.aggregate(rows, reg, days=7)
     h = Path(args.health) if args.health else None
     health_data = json.loads(h.read_text(encoding="utf-8")) if h and h.exists() else {}
     m = Path(args.matrix) if args.matrix else None
@@ -44,12 +48,13 @@ def cmd_dashboard(args) -> int:
     output = Path(args.out).resolve()
     if any(output == p or (output.exists() and p.exists() and output.samefile(p)) for p in inputs):
         raise ValueError('看板输出不得覆盖输入')
-    rows = usage.load_rows(args.ledger)
     flow_rows = rows[-20:][::-1]
     adapters = default_adapters()
     records = adapters.read('crew', rows)
     notes = []
+    task_items = []
     if args.task_store:
+        task_items = sources.task_store_tasks(args.task_store)
         stack_records = adapters.read('stack', args.task_store)
         if stack_records is None:
             notes.append('Stack 任务库尚无 Assignment 表；该来源未接入')
@@ -63,11 +68,47 @@ def cmd_dashboard(args) -> int:
             records.append(record)
     from crew import approvals
     approval_items = approvals.list_requests(args.approval_store) if args.approval_store else None
-    out = views.write_dashboard(args.out, usage=data, registry=reg, health=health_data,
-                                    matrix=matrix, flow_rows=flow_rows, records=records, notes=notes,
-                                    approval_items=approval_items, approvals_actionable=bool(args.serve and args.approval_store))
+    def latest(values):
+        dates = [v for v in values if timestamp(v) is not None]
+        return max(dates, key=timestamp) if dates else None
+    states = [
+        source_health('Crew 派工台账', args.ledger, last_at=latest(r.get('ts') or r.get('atUtc') for r in rows)),
+        source_health('执行器注册表', args.registry, snapshot=True),
+        source_health('执行器健康快照', args.health),
+        source_health('任务矩阵', args.matrix, snapshot=True),
+        source_health('Stack 任务库', args.task_store, last_at=latest(e.get('at') for t in task_items for e in t.get('events', []))),
+        source_health('任务审批', args.approval_store, snapshot=True),
+        source_health('宿主预算快照', args.host_budget),
+        source_health('Forge Agent 状态', args.agent_state_root or args.agent_state,
+                      last_at=latest(r.get('at') for r in records if r.get('source') == 'forge-agent')),
+    ]
+    return dict(usage=data, registry=reg, health=health_data, matrix=matrix, flow_rows=flow_rows,
+                records=records, notes=notes, approval_items=approval_items,
+                approvals_actionable=bool(args.serve and args.approval_store),
+                task_items=task_items, source_states=states)
+
+
+def cmd_dashboard(args) -> int:
+    out = views.write_dashboard(args.out, **load_dashboard(args))
     print(out)
     return 0
+
+
+def embed_origin(value):
+    """An explicit exact ancestor, never a wildcard or a CSP fragment."""
+    if not value:
+        return None
+    import re
+    try:
+        parsed = urlsplit(value)
+        _ = parsed.port
+        if (parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username is not None
+            or parsed.password is not None or value != parsed.scheme + '://' + parsed.netloc
+            or not re.fullmatch(r'[A-Za-z0-9.:-]+|\[[a-fA-F0-9:]+\](?::[0-9]+)?', parsed.netloc)):
+            raise ValueError()
+    except ValueError:
+        raise ValueError('embed-origin 必须是完整的 HTTP(S) origin，不含路径、通配符或凭据') from None
+    return value
 
 
 def cmd_dashboard_server(args) -> int:
@@ -91,6 +132,7 @@ def cmd_dashboard_server(args) -> int:
     if args.approval_store and not Path(args.approval_store).is_absolute():
         raise ValueError('approval-store 必须是绝对路径')
     csrf = secrets.token_urlsafe(32)
+    ancestor = embed_origin(getattr(args, 'embed_origin', None))
     with tempfile.TemporaryDirectory(prefix='nuwax-dashboard-') as temp:
         snapshot = copy.copy(args)
         snapshot.out = str(Path(temp) / 'dashboard.html')
@@ -111,9 +153,9 @@ def cmd_dashboard_server(args) -> int:
                         f'<span id="source-time">派工台账最后写入：{source_time}</span></div>'
                         '<nav class="view-nav" aria-label="看板视图">' +
                         ('<button type="button" data-target="approvals">任务审批</button>' if args.approval_store else '') +
+                        '<button type="button" data-target="tasks">任务工作台</button>'
                         '<button type="button" data-target="overview">运行总览</button>'
                         '<button type="button" data-target="routes">路由关系</button>'
-                        '<button type="button" data-target="tasks">任务详情</button>'
                         '<button type="button" data-target="models">模型与执行器</button>'
                         '<button type="button" data-target="dispatch">派工流水</button></nav>')
             marker = '<div id="dashboard-content">'
@@ -131,19 +173,21 @@ def cmd_dashboard_server(args) -> int:
                 if self.headers.get('Host') != f'127.0.0.1:{self.server.server_port}':
                     self.send_error(403)
                     return
-                if self.path not in ('/', '/index.html', '/live.js'):
+                path = urlsplit(self.path).path
+                if path not in ('/', '/index.html', '/live.js'):
                     self.send_error(404)
                     return
                 try:
-                    content = live_script if self.path == '/live.js' else render()
+                    content = live_script if path == '/live.js' else render()
                 except (OSError, ValueError, sqlite3.Error):
                     self.send_error(503, 'Dashboard source unavailable')
                     return
                 self.send_response(200)
-                self.send_header('Content-Type', 'application/javascript; charset=utf-8' if self.path == '/live.js' else 'text/html; charset=utf-8')
+                self.send_header('Content-Type', ('application/javascript' if path == '/live.js' else 'text/html') + '; charset=utf-8')
                 self.send_header('Cache-Control', 'no-store')
                 self.send_header('X-Content-Type-Options', 'nosniff')
-                self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+                frames = "'none'" if ancestor is None else ancestor
+                self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors " + frames)
                 self.send_header('Content-Length', str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
@@ -191,7 +235,7 @@ def cmd_dashboard_server(args) -> int:
 def add_arguments(p):
     p.add_argument("--ledger", required=True)
     p.add_argument("--registry", required=True)
-    for name in ("health", "matrix", "task-store", "agent-state", "agent-state-root", "host-budget", "approval-store", "out"):
+    for name in ("health", "matrix", "task-store", "agent-state", "agent-state-root", "host-budget", "approval-store", "embed-origin", "out"):
         p.add_argument("--" + name, default=None)
     p.add_argument("--serve", action="store_true")
     p.add_argument("--port", type=int, default=0)
@@ -202,6 +246,8 @@ def add_arguments(p):
 def dispatch_dashboard(args):
     if not args.serve and not args.out:
         raise ValueError("dashboard 需要 --out 或 --serve")
+    if getattr(args, 'embed_origin', None) and not args.serve:
+        raise ValueError('embed-origin 只支持 --serve')
     return cmd_dashboard_server(args) if args.serve else cmd_dashboard(args)
 
 
