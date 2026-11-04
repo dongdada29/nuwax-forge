@@ -38,6 +38,8 @@ export const USAGE = `用法：
   dsh-plugin  委托已安装的 DSH 宿主管理/运行插件；插件仍在 DSH 中运行，不注入 Forge 进程。
   bots    原版 DS-Bot 的隔离团队；prepare 可加 --tarball <原始tgz>。run 前台启动，Ctrl-C 停止；
           仅显式 --open 打开浏览器，run 不支持 --json。首次使用见 docs/BOT-QUICKSTART.md。
+          prepare --forge-config <操作者绝对JSON> 显式组合既有 Forge 原生桥；默认关闭。
+          后续 check/run 自动复用绑定配置并拒绝漂移，见 docs/BOT-BRIDGE-COMPOSITION.md。
   doctor  检查 Node>=22 / Python>=3.10 与 6 个包绑定，不联网、不改全局；有问题退出非 0。
   init    显式 opt-in：调用 nuwa-sdlc-kit verify:init 接线 verification，保留既有 hook/profile。
   verify  调用本包 stack 的 run_verification.py（crew-root 为同安装的 @nuwax-ai/devkit-crew）。

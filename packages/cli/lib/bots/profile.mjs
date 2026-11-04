@@ -2,7 +2,9 @@ import { spawnSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { BOT_FILES, BOT_PIN, BOT_PROFILE } from './pin.mjs';
+import { bridgeReport, inspectBridge, operatorConfigPath, prepareBridge } from './composition.mjs';
 
 const KIND = 'nuwax-forge-ds-bot';
 const MAX_ARTIFACT = 8 * 1024 * 1024;
@@ -20,6 +22,7 @@ export function botPaths(root) {
     profileDir: join(dshHome, 'profiles', BOT_PROFILE),
     team: join(root, 'team'), workspace: join(root, 'workspace'),
     marker: join(root, 'forge-bots.json'), archive: join(root, 'artifacts', 'ds-bot-0.2.7.tgz'),
+    bridgePatch: join(root, 'forge-bridge.patch.json'),
   };
 }
 
@@ -119,14 +122,21 @@ function version(binary, paths) {
   return found;
 }
 
-export function botPlan({ root, binary, port = 0 }) {
+export function botPlan({ root, binary, port = 0, forgeConfig }) {
   const paths = botPaths(root);
   binaryPath(binary);
   assert(Number.isInteger(port) && port >= 0 && port <= 65535, '--port must be an integer from 0 to 65535');
+  if (forgeConfig !== undefined) operatorConfigPath(forgeConfig);
+  let bridge = forgeConfig === undefined ? { enabled: false } : { requested: true, configPath: resolve(forgeConfig), patch: paths.bridgePatch };
+  if (existsSync(paths.marker)) {
+    const marker = owned(paths);
+    if (marker.bridge) bridge = bridgeReport(inspectBridge(paths, marker, forgeConfig));
+  }
   return {
     kind: KIND, pin: BOT_PIN, paths,
     prepare: ['plugin', '--profile', BOT_PROFILE, 'add', paths.archive, '--save-exact', '--ignore-scripts', '--store-dir', join(paths.root, 'cache', 'pnpm-store'), '--cache-dir', join(paths.root, 'cache', 'pnpm'), '--config.state-dir=' + join(paths.root, 'state', 'pnpm')],
     run: ['--profile', BOT_PROFILE, '--host', '127.0.0.1', '--port', String(port), '--no-open'],
+    bridge,
     acceptance: { installation: 'not-run', composition: 'not-run', host: 'not-run', ui: 'not-run', modelBehavior: 'not-run' },
   };
 }
@@ -220,15 +230,26 @@ export function verifyBotComposition(dump, paths) {
   return { bot: 'ds-bot', webSearch: 'ds-bot/web-search', memory: true };
 }
 
-function inspect({ root, binary }) {
+function inspect({ root, binary, forgeConfig }) {
   const paths = botPaths(root);
-  owned(paths); setup(paths);
+  const marker = owned(paths); setup(paths);
+  const bridge = inspectBridge(paths, marker, forgeConfig);
   const dshVersion = version(binary, paths);
   localFile(paths, paths.archive);
   verifyBotArchive(readFileSync(paths.archive));
   const pkg = packageCheck(paths);
-  const composition = verifyBotComposition(invoke(binary, paths, ['--profile', BOT_PROFILE, '--dump-config']), paths);
-  return { kind: KIND, pin: BOT_PIN, paths, dshVersion, package: pkg, composition, acceptance: { installation: 'verified', composition: 'verified', host: 'not-run', ui: 'not-run', modelBehavior: 'not-run' } };
+  const dump = invoke(binary, paths, ['--profile', BOT_PROFILE, '--dump-config']);
+  const composition = verifyBotComposition(dump, paths);
+  if (bridge) {
+    assert(dump.split(/(?=^- id: )/m).filter(row => row.split('\n', 1)[0] === '- id: forge-bot-bridge').length === 1, 'Native Forge bridge entry is missing or duplicated');
+    const row = rowOf(dump, 'forge-bot-bridge');
+    assert(scalar(row, 'name', 2) === pathToFileURL(bridge.binding.entry).href, 'Native Forge bridge entry changed');
+    assert([undefined, 'false'].includes(scalar(row, 'disabled', 2)), 'Native Forge bridge entry is disabled');
+    for (const key of ['stateRoot', 'nodeBinary', 'forgeRoot', 'forgeEntry', 'schemaVersion', 'allowPrepare']) {
+      assert(scalar(row, key, 4) === String(bridge.config[key]), 'Native Forge bridge configuration changed: ' + key);
+    }
+  } else assert(!rowOf(dump, 'forge-bot-bridge'), 'Unbound native Forge bridge entry is forbidden');
+  return { kind: KIND, pin: BOT_PIN, paths, dshVersion, package: pkg, composition, bridge: bridgeReport(bridge), acceptance: { installation: 'verified', composition: 'verified', host: 'not-run', ui: 'not-run', modelBehavior: 'not-run' } };
 }
 
 export async function prepareBot(options) {
@@ -246,6 +267,8 @@ export async function prepareBot(options) {
     if (!existsSync(patch) || readFileSync(patch, 'utf8').replace(/^\s*#.*$/gm, '').trim() === '[]') {
       writeFileSync(patch, JSON.stringify([{ id: 'bot', config: { home: paths.team, workspace: paths.workspace, memory: true, updateCheck: false } }], null, 2) + '\n', { mode: 0o600 });
     }
+    await prepareBridge(paths, marker, options.forgeConfig,
+      value => writeFileSync(paths.marker, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 }), localFile);
     await archive(paths, options.tarball);
     invoke(options.binary, paths, plan.prepare);
     const result = inspect(options);
