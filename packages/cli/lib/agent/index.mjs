@@ -72,14 +72,19 @@ export function reconcile(state) {
   const observer = new Observation(spec.runtime.kind), log = path.join(state, 'stdout.jsonl');
   let validLog = true;
   if (existsSync(log) && statSync(log).size <= 8 * 1048576) {
-    for (const line of readFileSync(log, 'utf8').split('\n').filter(s => s.trim())) try { observer.push(JSON.parse(line)); } catch { validLog = false; }
-  } else validLog = false;
+    for (const line of readFileSync(log, 'utf8').split('\n').filter(s => s.trim())) try { observer.push(JSON.parse(line)); } catch { validLog = false; observer.bad('malformed-jsonl'); }
+  } else { validLog = false; observer.bad('missing-or-oversized-log'); }
   const actual = observer.result(validLog && manifest.processPassed === true);
   save(path.join(state, 'usage.json'), actual);
   const settlement = settleExecution({ estimate: guard.estimate, actual });
+  const lowerBound = actual.observation.reportedTokensLowerBound;
+  settlement.observedBudget = { maxTokens: spec.budget.maxTokens, reportedTokensLowerBound: lowerBound,
+    verdict: lowerBound !== null && lowerBound > spec.budget.maxTokens ? 'exceeds' : 'unknown',
+    note: '已报告用量下界（含缓存输入），不是完整账单；低于限额不能证明预算达标。' };
   save(path.join(state, 'budget-reconcile.json'), settlement);
   const result = { ...manifest, agentCompleted: actual.observation.agentCompleted, usageKnown: actual.observation.known,
-    budgetPassed: settlement.reconciliation.budget.verdict === 'within', chargedTokens: settlement.chargedTokens,
+    budgetPassed: settlement.reconciliation.budget.verdict === 'within' && settlement.observedBudget.verdict !== 'exceeds', chargedTokens: settlement.chargedTokens,
+    observedBudget: settlement.observedBudget,
     acceptancePassed: null, warning };
   result.status = result.processPassed && result.agentCompleted && result.budgetPassed ? 'completed' : result.modelDispatched ? 'failed' : 'blocked';
   save(manifestFile, result); return { ...result, state };

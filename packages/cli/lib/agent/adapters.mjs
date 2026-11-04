@@ -112,10 +112,22 @@ export class Observation {
   result(clean = true) {
     const complete = clean && this.errors.length === 0 && Boolean(this.session) && this.completed && this.final && this.usage.length > 0
       && (this.kind === 'codex' ? this.starts.size === 1 : this.starts.size === this.steps.size && [...this.starts].every(k => this.steps.has(k)));
-    const sum = key => this.usage.length > 0 && this.usage.every(u => number(u[key])) ? this.usage.reduce((s, u) => s + u[key], 0) : null;
+    const sum = key => {
+      if (!this.usage.length || !this.usage.every(u => number(u[key]))) return null;
+      const total = this.usage.reduce((s, u) => s + u[key], 0);
+      return number(total) ? total : null;
+    };
+    const inputTokens = sum('inputTokens'), outputTokens = sum('outputTokens');
+    // A failed/terminated process cannot establish a complete bill. Valid,
+    // identified reports can still prove a lower bound, including cached input.
+    const identifiedReports = this.errors.length === 0 && Boolean(this.session) && this.usage.length > 0
+      && (this.kind === 'codex' ? this.starts.size === 1 : [...this.steps].every(k => this.starts.has(k)));
+    const reportedTotal = inputTokens !== null && outputTokens !== null ? inputTokens + outputTokens : null;
+    const reportedTokensLowerBound = identifiedReports && number(reportedTotal) ? reportedTotal : null;
     return { usageScope: complete ? 'run-segment' : 'unknown', inputSemantics: 'includes-cache', calls: null,
-      usage: { inputTokens: sum('inputTokens'), outputTokens: sum('outputTokens'), cachedReadTokens: sum('cachedReadTokens'), cacheWriteTokens: sum('cacheWriteTokens') },
+      usage: { inputTokens, outputTokens, cachedReadTokens: sum('cachedReadTokens'), cacheWriteTokens: sum('cacheWriteTokens') },
       observation: { known: complete, sessionId: this.session, agentCompleted: this.completed && this.final,
+        reportedTokensLowerBound,
         reportedSteps: this.usage.length, errors: this.errors, rawUsage: this.usage.map(u => u.raw),
         note: 'calls unknown：step/turn 不等于 provider 请求数；缓存拆分未知保持 null；仅新会话 stdout，不读历史' } };
   }
