@@ -1,6 +1,7 @@
 """Explicit local sources for the Forge dashboard. No network or state mutation."""
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -13,6 +14,14 @@ def _text(value):
 
 
 from crew.delivery import delivery_fields
+
+
+def _event(row, details=None):
+    details = details or {}
+    summary = next((value[:2048] for value in (details.get('reason'), details.get('reportSummary'),
+                    row.get('reason'), row.get('reportSummary')) if isinstance(value, str)), '')
+    return {'status': _text(row.get('status')), 'at': row.get('ts') or row.get('atUtc') or row.get('at'),
+            'summary': summary, **delivery_fields(row, details)}
 
 
 def crew_records(rows):
@@ -41,16 +50,37 @@ def crew_records(rows):
                         'executor': _text(row.get('executor')), 'role': _text(row.get('role')), 'model': model,
                         'status': row.get('status'), 'tokens': charge if 'chargedTokens' in details else old.get('tokens'),
                         'at': row.get('ts') or row.get('atUtc') or old.get('at'),
-                        'legacyUncorrelated': not bool(attempt), **delivery_fields(old, row, details)}
+                        'legacyUncorrelated': not bool(attempt),
+                        'events': [*old.get('events', []), _event(row, details)],
+                        **delivery_fields(old, row, details)}
+    # Resolve each lifecycle event directly to the first execution step for its
+    # exact task + attempt. Preserve the original single-attachment semantics
+    # without scanning every execution again for each lifecycle row.
+    by_attempt = {}
+    for record in grouped.values():
+        if record.get('attemptId'):
+            by_attempt.setdefault((record.get('taskKey'), record['attemptId']), record)
+    for row in rows:
+        if row.get('status') in {'attempt-started', 'attempt-blocked', 'attempt-failed', 'attempt-completed'} and _text(row.get('attemptId')):
+            record = by_attempt.get((row.get('taskKey'), row['attemptId']))
+            if record is not None:
+                details = row.get('details') if isinstance(row.get('details'), dict) else {}
+                record['events'].append(_event(row, details))
     return list(grouped.values())
 
 
 def task_store_records(path):
     p = Path(path).resolve(strict=True)
-    with sqlite3.connect(p.as_uri() + '?mode=ro', uri=True) as db:
+    with closing(sqlite3.connect(p.as_uri() + '?mode=ro', uri=True)) as db:
         if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='assignments'").fetchone():
             return None
         rows = db.execute('SELECT attempt_id,task_id,state,payload FROM assignments').fetchall()
+        events = {}
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='assignment_events'").fetchone():
+            for attempt, operation, at, encoded in db.execute('SELECT attempt_id,operation,at,payload FROM assignment_events ORDER BY event_id'):
+                data = json.loads(encoded)
+                events.setdefault(attempt, []).append({'status': data.get('state') or operation, 'at': at,
+                                                       'summary': _text(data.get('reportSummary')), **delivery_fields(data)})
     out = []
     for attempt, task, state, encoded in rows:
         payload = json.loads(encoded)
@@ -58,7 +88,34 @@ def task_store_records(path):
         out.append({'source': 'stack', 'taskKey': task, 'attemptId': attempt,
                     'executor': _text(payload.get('executor')), 'role': _text(payload.get('role')),
                     'model': _text(payload.get('model')), 'status': state, 'tokens': _tokens(usage.get('tokens')),
-                    'modelCalls': _tokens(usage.get('modelCalls')), 'at': None, **delivery_fields(payload)})
+                    'modelCalls': _tokens(usage.get('modelCalls')),
+                    'at': events.get(attempt, [{}])[-1].get('at'), 'events': events.get(attempt, []),
+                    'summary': _text(payload.get('reportSummary')), 'sessionId': _text(payload.get('sessionId')),
+                    **delivery_fields(payload)})
+    return out
+
+
+def task_store_tasks(path):
+    """Read task metadata independently of whether an Assignment exists yet."""
+    p = Path(path).resolve(strict=True)
+    with closing(sqlite3.connect(p.as_uri() + '?mode=ro', uri=True)) as db:
+        columns = {r[1] for r in db.execute('PRAGMA table_info(tasks)')}
+        if not {'id', 'payload'}.issubset(columns):
+            return []
+        rows = db.execute('SELECT id,payload FROM tasks').fetchall()
+        events = {}
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='events'").fetchone():
+            for task, at, encoded in db.execute('SELECT task_id,at,payload FROM events ORDER BY revision'):
+                data = json.loads(encoded)
+                events.setdefault(task, []).append({'source': 'stack', 'status': data.get('phase'), 'at': at,
+                                                   'summary': data.get('blocker') or data.get('last_action') or data.get('next_action')})
+    out = []
+    for task, encoded in rows:
+        data = json.loads(encoded)
+        out.append({'source': 'stack', 'taskKey': task, 'title': data.get('objective'),
+                    'objective': data.get('objective'), 'acceptance': data.get('predicates') or [],
+                    'workspace': data.get('repo_root'), 'status': data.get('phase'),
+                    'events': events.get(task, [])})
     return out
 
 
@@ -71,10 +128,14 @@ def agent_state_record(path):
     if manifest.get('modelDispatched') is not True:
         return None
     runtime = request.get('runtime') if isinstance(request.get('runtime'), dict) else {}
+    events = [{'status': 'started', 'at': manifest.get('startedAt'), 'summary': ''}]
+    events.append({'status': manifest.get('status'), 'at': manifest.get('finishedAt'),
+                   'summary': _text(manifest.get('reason')), **delivery_fields(manifest)})
     return {'source': 'forge-agent', 'taskKey': manifest.get('taskKey'), 'attemptId': None,
             'executor': _text(runtime.get('kind')), 'role': 'worker', 'model': _text(runtime.get('model')),
             'status': manifest.get('status'), 'tokens': _tokens(manifest.get('chargedTokens')) if manifest.get('usageKnown') is True else None,
-            'modelCalls': None, 'at': manifest.get('startedAt'), **delivery_fields(manifest)}
+            'modelCalls': None, 'at': manifest.get('finishedAt') or manifest.get('startedAt'),
+            'events': events, **delivery_fields(manifest)}
 
 
 def host_guard_records(path):

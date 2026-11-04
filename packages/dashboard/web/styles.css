@@ -99,3 +99,67 @@ h2{font-size:14px;letter-spacing:.09em}.meta{line-height:1.7}
 table{border-radius:10px;overflow:hidden}th{background:#1a2637}
 @media(max-width:1000px){.summary-card,.summary-card.wide{grid-column:span 6}}
 @media(max-width:650px){.summary-card,.summary-card.wide{grid-column:span 12}.donut{width:128px;height:128px}.summary-grid{gap:10px}.bar-row{grid-template-columns:110px 1fr 30px}header{align-items:flex-start;gap:10px}.meta{max-width:55%}}
+
+/* Task workspace: shared browser client, also usable inside a DSH panel. */
+[hidden]{display:none!important}
+button,input,select{font:inherit}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.eyebrow{color:var(--dim);font-size:11px;letter-spacing:.12em;margin-bottom:5px}
+.workbench-heading{display:flex;justify-content:space-between;gap:16px;margin-bottom:20px}
+.workbench-heading h2{color:var(--ink);font-size:24px;letter-spacing:0;text-transform:none;margin-bottom:5px}
+.workbench-heading h2 b{color:var(--dim);font-size:18px;margin-left:8px}
+.task-controls,.task-quick-filters{display:none}
+.live-dashboard .task-quick-filters{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
+.task-quick-filters button,.task-controls button,.task-detail-body button,.task-dialog-close{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--ink);cursor:pointer}
+.task-quick-filters button b{margin-left:12px;color:var(--dim)}
+.task-quick-filters button[aria-pressed=true]{border-color:var(--blue);background:#213950}
+.live-dashboard .task-controls{display:grid;grid-template-columns:minmax(220px,2fr) repeat(4,minmax(120px,1fr)) auto;align-items:end;gap:10px;margin-bottom:14px}
+.task-controls label{display:flex;flex-direction:column;gap:6px;color:var(--dim);font-size:12px;min-width:0}
+.task-controls input,.task-controls select{width:100%;min-width:0;border:1px solid var(--line);border-radius:7px;padding:9px 10px;background:#111c2b;color:var(--ink);font-size:14px}
+#task-results{color:var(--dim);font-size:12px;margin-bottom:10px}
+.task-table-wrap{overflow-x:auto}
+.task-table-wrap table{display:table;table-layout:fixed;width:100%}
+.task-table-wrap th:first-child{width:38%}.task-table-wrap th:nth-child(2){width:17%}.task-table-wrap th:nth-child(3){width:20%}
+.task-table-wrap td{padding:15px 12px;overflow-wrap:anywhere}
+.task-table-wrap td small{display:block;color:var(--dim);font-size:11px;margin-top:5px}
+.task-table-wrap td small.status-difference{color:var(--amber)}
+.task-link{color:var(--ink);text-decoration:none;font-weight:600;font-size:14px;display:inline-block}
+.task-link:hover{color:var(--blue);text-decoration:underline}
+.task-state{font-size:12px;display:inline-block;color:var(--dim)}
+.state-running{color:var(--blue)}.state-approval{color:var(--amber)}.state-review{color:var(--violet)}.state-blocked{color:var(--red)}.state-done{color:var(--green)}
+.task-empty{padding:20px 0;color:var(--dim)}
+.freshness-notice{color:var(--amber);font-size:12px;border-left:2px solid var(--amber);padding:7px 12px;margin-bottom:16px}
+.task-detail{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.task-detail summary{cursor:pointer;color:var(--blue)}
+.live-dashboard .task-detail{display:none}
+.source-health{padding-top:4px;color:var(--dim);font-size:12px}
+.source-health summary{cursor:pointer}.source-health summary span{font-size:11px}
+.source-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;list-style:none;margin-top:16px}
+.source-item{display:grid;grid-template-columns:1fr auto;gap:6px;border-top:1px solid var(--line);padding-top:10px}
+.source-item b{color:var(--ink);font-weight:500}.source-item small{grid-column:1/-1}
+.source-stale>span,.source-missing>span{color:var(--amber)}
+.task-dialog{margin:auto;width:min(820px,calc(100% - 28px));max-height:88vh;padding:24px;border:1px solid var(--line);border-radius:14px;background:#141d2b;color:var(--ink);overflow:auto;box-shadow:0 20px 80px #0008;overflow-wrap:anywhere}
+.task-dialog::backdrop{background:#050a13b8}
+.task-dialog-close{display:block;margin-left:auto;margin-bottom:18px}
+.task-detail-body h3{font-size:22px;line-height:1.4;margin:6px 0 10px}
+.task-detail-body h4{font-size:14px;border-top:1px solid var(--line);padding-top:20px;margin:22px 0 10px}
+.task-detail-body p{white-space:pre-wrap;font-size:13px;margin:7px 0}
+.task-detail-body a{color:var(--blue)}
+.task-facts{padding-left:20px;font-size:13px}.task-facts li{margin:5px 0}
+.task-notice{color:var(--amber);border-left:2px solid var(--amber);padding-left:12px}
+.attempt-list{list-style:none}.attempt-list>li{border-bottom:1px solid var(--line);padding:12px 0;font-size:12px}
+.attempt-heading{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}.attempt-heading span{color:var(--dim)}
+.task-timeline{list-style:none;margin-top:16px}.task-timeline>li{display:grid;grid-template-columns:100px 1fr;gap:16px;margin:0 0 16px}
+.task-timeline time{font-size:12px;color:var(--dim)}.task-timeline>li>div{border-left:2px solid var(--line);padding-left:14px;min-width:0;font-size:13px}
+.task-timeline small{display:block;color:var(--dim);font-size:11px;margin:3px 0}
+@media(max-width:1100px){.live-dashboard .task-controls{grid-template-columns:repeat(3,minmax(0,1fr))}.task-search{grid-column:span 2}}
+@media(max-width:650px){
+  .wrap>header{display:block}.meta{text-align:left;max-width:none;margin-top:10px}
+  .live-dashboard .task-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.task-search{grid-column:1/-1}
+  .task-controls input,.task-controls select{font-size:16px}.task-controls button{min-height:44px}
+  .task-table-wrap table,.task-table-wrap tbody{display:block}.task-table-wrap thead{display:none}
+  .task-table-wrap tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-bottom:1px solid var(--line)}
+  .task-table-wrap td{border:0;padding:7px 12px}.task-table-wrap td:first-child{grid-column:1/-1;padding-top:16px}.task-table-wrap td:last-child{padding-bottom:16px}
+  .task-dialog{padding:16px}.task-detail-body h3{font-size:19px}.task-timeline>li{grid-template-columns:1fr;gap:6px}
+  .task-quick-filters button{min-height:44px}.pager{flex-wrap:wrap;justify-content:center}
+}

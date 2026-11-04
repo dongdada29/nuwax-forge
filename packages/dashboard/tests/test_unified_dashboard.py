@@ -56,9 +56,11 @@ class UnifiedDashboardTests(unittest.TestCase):
             dbfile = Path(td) / 'tasks.sqlite'
             with sqlite3.connect(dbfile) as db:
                 db.execute('CREATE TABLE tasks (id TEXT)')
+            db.close()
             self.assertIsNone(u.task_store_records(dbfile))
             with sqlite3.connect(dbfile) as db:
                 self.assertEqual(db.execute("SELECT count(*) FROM sqlite_master WHERE name='assignments'").fetchone()[0], 0)
+            db.close()
 
     def test_multiple_steps_of_same_attempt_stay_distinct(self):
         base = {'taskKey':'task', 'attemptId':'same', 'executor':'codex', 'role':'worker'}
@@ -69,6 +71,51 @@ class UnifiedDashboardTests(unittest.TestCase):
         records = u.crew_records(rows)
         self.assertEqual(len(records), 2)
         self.assertEqual([r['tokens'] for r in records], [1, 2])
+
+    def test_lifecycle_events_attach_once_to_the_first_step_of_the_exact_task_attempt(self):
+        rows = []
+        for task, attempt, steps in [('a', 'shared', (1, 2)), ('b', 'shared', (1,)), ('a', 'different', (1,))]:
+            base = {'taskKey': task, 'attemptId': attempt, 'executor': 'codex', 'role': 'worker'}
+            rows.append({**base, 'status': 'attempt-started'})
+            for step in steps:
+                rows.extend([{**base, 'status': 'dispatched', 'details': {'stepIndex': step}},
+                             {**base, 'status': 'completed', 'details': {'stepIndex': step, 'chargedTokens': 0}}])
+            rows.append({**base, 'status': 'attempt-completed'})
+        rows.extend([{'taskKey': 'unmatched', 'attemptId': 'shared', 'status': 'attempt-started'},
+                     {'taskKey': 'a', 'status': 'attempt-started'}])
+        records = u.crew_records(rows)
+        self.assertEqual(len(records), 4)
+        self.assertEqual([(r['taskKey'], r['attemptId']) for r in records],
+                         [('a', 'shared'), ('a', 'shared'), ('b', 'shared'), ('a', 'different')])
+        self.assertEqual([len(r['events']) for r in records], [4, 2, 4, 4])
+        for record in (records[0], records[2], records[3]):
+            self.assertEqual([e['status'] for e in record['events']],
+                             ['dispatched', 'completed', 'attempt-started', 'attempt-completed'])
+        self.assertEqual([r['tokens'] for r in records], [0, 0, 0, 0])
+
+    def test_lifecycle_attachment_has_a_linear_identity_comparison_bound(self):
+        # Count identity comparisons instead of relying on machine timing.
+        # Caching a lifecycle row's fields while still scanning every execution
+        # would remain quadratic and fail this bound as well.
+        class TaskKey(str):
+            comparisons = 0
+            __hash__ = str.__hash__
+
+            def __eq__(self, other):
+                TaskKey.comparisons += 1
+                return super().__eq__(other)
+
+        count = 256
+        rows = []
+        for index in range(count):
+            base = {'taskKey': TaskKey('task-' + str(index)), 'attemptId': 'shared', 'executor': 'codex', 'role': 'worker'}
+            rows.extend([{**base, 'status': 'attempt-started'},
+                         {**base, 'status': 'dispatched', 'details': {'stepIndex': 1}},
+                         {**base, 'status': 'completed', 'details': {'stepIndex': 1}}])
+        records = u.crew_records(rows)
+        self.assertEqual(len(records), count)
+        self.assertTrue(all(len(record['events']) == 3 for record in records))
+        self.assertLess(TaskKey.comparisons, 16 * len(rows))
 
     def test_route_edges_only_link_explicit_host_workers(self):
         rows = [

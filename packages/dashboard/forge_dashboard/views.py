@@ -9,6 +9,8 @@ import shlex
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from . import sources as unified_dashboard
+from .workbench import build_workbench
+from .task_views import render_workbench, delivery_html
 
 BOARD_COLUMNS = [
     ("待分诊/待决策", ["pending-triage", "pending", "plan-only", "pending-decision"], "wait"),
@@ -55,16 +57,6 @@ def configured_engine(executor):
             'cursor-agent': 'Cursor', 'agy': 'Antigravity'}.get(command_name, '未识别')
 
 
-def delivery_html(record):
-    delivery = unified_dashboard.delivery_fields(record)
-    rows = []
-    if delivery.get('branch'): rows.append('分支：' + esc(delivery['branch']))
-    if delivery.get('commit'): rows.append('提交：<code>' + esc(delivery['commit']) + '</code>')
-    if delivery.get('prUrl'):
-        rows.append('PR：<a href="' + esc(delivery['prUrl']) + '" target="_blank" rel="noopener noreferrer">查看 PR ↗</a>')
-    return ''.join('<div>' + row + '</div>' for row in rows) or '<span class="dim">未记录</span>'
-
-
 def _status_cell(name: str, meta: dict, health: dict) -> str:
     if not meta.get("enabled", True):
         return '<span class="err">⏹ 下架</span>'
@@ -90,7 +82,7 @@ def board_columns(matrix: list) -> list:
     return [(title, cls, buckets[title]) for title, _, cls in BOARD_COLUMNS]
 
 
-def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_rows: list, *, generated_at: str, records=None, notes=None, approval_items=None, approvals_actionable=False) -> str:
+def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_rows: list, *, generated_at: str, records=None, notes=None, approval_items=None, approvals_actionable=False, task_items=None, source_states=None) -> str:
     ex = usage["perExecutor"]
     subs = usage["perSubscription"]
     total = sum(v["total"] for v in ex.values())
@@ -157,6 +149,8 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
         for r in flow_rows)
 
     records = records or []
+    tasks = build_workbench(records, matrix=matrix, approvals=approval_items, tasks=task_items or [])
+    workbench_html = render_workbench(tasks, source_states=source_states or [])
     notes_html = ''.join(f'<p class="warn">{esc(note)}</p>' for note in (notes or []))
     groups = unified_dashboard.summarize(records)
     totals = {source: sum(g['attempts'] for g in groups if g['source'] == source) for source in {g['source'] for g in groups}}
@@ -276,8 +270,9 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Nuwax Forge 运行看板</title><style>{CSS}</style></head>
 <body><div class="wrap">
 <header><h1>Nuwax Forge <span class="tag">// 运行看板</span></h1>
-<div class="meta">生成于 {esc(generated_at)}<br>数据：executors.json · crew-usage.jsonl · crew-health.json · matrix.json</div></header>
+<div class="meta">读取于 {esc(generated_at)}<br>任务、执行与验收记录 · 本机工作台</div></header>
 <div id="dashboard-content">
+{workbench_html}
 {approval_section}
 <section data-view="overview"><h2>总览 <b>OVERVIEW</b></h2>{kpis}</section>
 <section data-view="overview"><div class="summary-grid">
@@ -296,12 +291,12 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <p class="dim">按来源分别统计，跨来源可能是同一次执行；已知 token 为部分合计，未知次数单列。缺少 attemptId 的历史记录无法去重。host-guard 是观测快照，不含后续消耗；模型为执行记录声明，不推断实际供应商账单。</p>
 {notes_html}
 <table data-paginate="models"><tr><th>来源</th><th>执行器</th><th>角色</th><th>模型</th><th>尝试/记录</th><th>已知 token</th><th>用量未知</th></tr>{model_rows}</table></section>
-<section data-view="tasks"><h2>任务与执行 <b>TASK / ASSIGNMENT</b>（按来源顺序最多 200 条）</h2><p class="dim">交付结果来自执行记录或执行器报告，尚未独立验证分支、提交或 PR。</p><table data-paginate="tasks"><tr><th>来源</th><th>任务</th><th>尝试</th><th>执行器</th><th>角色</th><th>模型</th><th>状态</th><th>token</th><th>模型调用</th><th>交付结果</th></tr>{task_rows}</table></section>
+<section data-view="dispatch"><details><summary>原始执行记录（按来源顺序最多 200 条）</summary><p class="dim">交付结果来自执行记录或执行器报告，尚未独立验证分支、提交或 PR。</p><table data-paginate="tasks"><tr><th>来源</th><th>任务</th><th>尝试</th><th>执行器</th><th>角色</th><th>模型</th><th>状态</th><th>token</th><th>模型调用</th><th>交付结果</th></tr>{task_rows}</table></details></section>
 <section data-view="models"><h2>已登记引擎与通道 <b>ENGINE / PROVIDER</b></h2><p class="dim">载体由当前注册表的启动命令识别；提供方是当前配置。历史模型以执行记录为准，未记录不回填。</p><table data-paginate="engines"><tr><th>执行器标签</th><th>配置的载体</th><th>配置的提供方</th><th>订阅 / 通道</th><th>台账记录数</th></tr>{engine_table}</table></section>
 <section data-view="models"><h2>订阅使用量 <b>SUBSCRIPTION USAGE</b></h2><div class="subs">{subs_html}</div></section>
 <section data-view="models"><h2>执行器池 <b>EXECUTOR POOL</b></h2>
 <table data-paginate="pool"><tr><th>执行器</th><th>层</th><th>订阅</th><th>状态</th><th>今日记录</th><th>记录成功率</th><th>记录数</th><th>最近</th></tr>{pool_html}</table></section>
-<section data-view="tasks"><h2>任务看板 <b>TASK BOARD</b>（{len(matrix)} 项）</h2><div class="board">{board_html}</div></section>
+<section data-view="dispatch"><details><summary>来源任务看板 · {len(matrix)} 项</summary><div class="board">{board_html}</div></details></section>
 <section data-view="dispatch"><h2>派工流水 <b>RECENT DISPATCHES</b>（最近 20 条）</h2>
 <table data-paginate="dispatch"><tr><th>时间</th><th>任务</th><th>执行器</th><th>角色</th><th>结果</th></tr>{flow_html}</table></section>
 <footer>regenerate：nuwax-forge dashboard --ledger &lt;crew-usage.jsonl&gt; --registry &lt;executors.json&gt; --out &lt;this.html&gt;<br>
@@ -309,9 +304,9 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 </div></div></body></html>"""
 
 
-def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list, records=None, notes=None, approval_items=None, approvals_actionable=False) -> str:
+def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list, records=None, notes=None, approval_items=None, approvals_actionable=False, task_items=None, source_states=None) -> str:
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
-    page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at, records=records, notes=notes, approval_items=approval_items, approvals_actionable=approvals_actionable)
+    page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at, records=records, notes=notes, approval_items=approval_items, approvals_actionable=approvals_actionable, task_items=task_items, source_states=source_states)
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(page, encoding="utf-8")
