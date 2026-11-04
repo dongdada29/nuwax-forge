@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseOptions, summarizeState } from '../../../scripts/bot-real-ui-acceptance.mjs';
+import { EventEmitter } from 'node:events';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createSignalCancellation, parseOptions, startAcceptanceHost, summarizeState } from '../../../scripts/bot-real-ui-acceptance.mjs';
 
 test('real browser acceptance is explicit and rejects implicit/duplicate paths', () => {
   const args = ['--open', '--root', '/tmp/new-team', '--dsh', '/dsh', '--tarball', '/bot.tgz', '--output', '/tmp/report.json'];
@@ -18,4 +22,23 @@ test('catalog summaries exclude secret values and do not equate needsKey with au
   assert.equal(result.allBotsWaitingWithoutModel, true);
   assert.ok(!JSON.stringify(result).includes('private'));
   assert.ok(!JSON.stringify(result).includes('secret'));
+});
+
+test('SIGINT and SIGTERM abort before host creation and remove only owned handlers', async t => {
+  const parent = mkdtempSync(join(tmpdir(), 'forge-ui-cancel-'));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  for (const name of ['SIGINT', 'SIGTERM']) {
+    const source = new EventEmitter(); const existing = () => {};
+    source.on(name, existing);
+    const cancellation = createSignalCancellation(source);
+    source.emit(name);
+    assert.equal(cancellation.signal.aborted, true);
+    assert.equal(cancellation.signal.reason, name);
+    const root = join(parent, name);
+    await assert.rejects(startAcceptanceHost({ root, dsh: '/must-not-run' }, true, cancellation.signal), reason => reason === name);
+    assert.equal(existsSync(root), false);
+    cancellation.dispose();
+    assert.deepEqual(source.listeners(name), [existing]);
+    assert.equal(source.listenerCount(name === 'SIGINT' ? 'SIGTERM' : 'SIGINT'), 0);
+  }
 });
