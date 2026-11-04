@@ -1,0 +1,45 @@
+{
+  "observedOn": "2026-11-04",
+  "host": {
+    "version": "0.2.1-rc.5",
+    "bootGraphRelease": { "version": "0.2.1-rc.5", "commit": "d4db512" },
+    "source": "Installed DeepSeek Harness.app app.asar, read with its Electron Node mode",
+    "referenceUpstreamCommit": "b830ec950faba0a46dda564be3e2d854afed94f1",
+    "installedBuildMatchesReference": "not established"
+  },
+  "apiSha256": {
+    "dsh-client-modules/lib/index.js": "a2a33e32f13fdc9598b4751c4c22fb72789190bf5ba7337cd5a3d0cb4b4417ec",
+    "dsh-client-modules/lib/client.js": "426084f8672c26a469566a3f43c91a9b0d1dd73d0834028e553a6d0fa9cffa44",
+    "dsh-client-ui-schedule/lib/client.js": "af49ff44d1a5f0d8d7edbd0008d856e770bfd1eb59f64ae21f47e1ca7e4a7e22",
+    "dsh-client-ui-layout/lib/client.js": "64366054aba2a9e4abfa0e064e20f5d752f94cfa831e20b0034c21a8031f9860",
+    "dsh-client-ui-sidebar/lib/client.js": "e1421cbd77f3747da92544aa857ab1e7f832f1eb44ba5b10518370b854cf4c55"
+  },
+  "isolation": {
+    "temporaryHomeAndDshHome": true,
+    "inheritedProviderCredentials": false,
+    "providerRowsDisabled": ["llm-deepseek", "llm-deepseek-account", "llm-pi-ai"],
+    "promptsSubmitted": 0,
+    "originalProfilesModified": false
+  },
+  "httpSmoke": {
+    "realHostBootGraphIncludesPlugin": true,
+    "realHostServesPluginJavaScript": true,
+    "allowedAndDeniedAncestorHeaders": true,
+    "corsHeaderAbsent": true,
+    "wrongHostStatus": 403,
+    "crossOriginApprovalPostStatus": 403
+  },
+  "realHostBrowser": {
+    "browser": "nuwa-browser Chromium, isolated task space",
+    "hostOrigin": "http://127.0.0.1:53245",
+    "nativeSidebarEntry": "Nuwax Forge",
+    "nativeMainPanelOpened": true,
+    "allowedFrameUrl": "http://127.0.0.1:53750/",
+    "allowedFrameSecurityOrigin": "http://127.0.0.1:53750",
+    "allowedFrameDomContains": "dsh-host-fixture",
+    "deniedServiceFrameAncestor": "http://127.0.0.1:1",
+    "deniedFrameUrl": "chrome-error://chromewebdata/",
+    "deniedFrameUnreachableUrl": "http://127.0.0.1:53751/"
+  },
+  "notVerified": ["native Electron window", "HTTPS/TLS deployment", "remote client loopback reachability", "real approval write"]
+}
