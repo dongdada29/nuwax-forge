@@ -15,13 +15,17 @@ export function apply(ctx, config) {
       parameters: { type: 'object', additionalProperties: false, required: ['taskId'], properties: { taskId: { type: 'string', maxLength: 1024 } } }, execute: bridge.task },
     { name: 'personal_agent_request_preview', description: 'Preview only: 未提交、未创建 PA 任务、未获执行授权. Produces no persistent task, approval, execution, or command. Forge references are unverified declarations.',
       parameters: { type: 'object', additionalProperties: false, required: ['requestId', 'goal'], properties: {
-        requestId: { type: 'string', maxLength: 128 }, goal: { type: 'string', maxLength: 10000 },
+        requestId: { type: 'string', maxLength: 200 }, goal: { type: 'string', maxLength: 10000 }, workspace: { type: 'string', maxLength: 80 },
         forgeTaskKey: { type: 'string', maxLength: 1024 }, forgeAttemptId: { type: 'string', maxLength: 1024 },
       } }, execute: bridge.requestPreview },
+    { name: 'personal_agent_request', description: 'Request an original PA Forge task only when the operator explicitly enables restricted intake and workspace aliases. Default is an unsubmitted preview. Original PA human admission is required before execution; this tool cannot approve or control tasks.',
+      parameters: { type: 'object', additionalProperties: false, required: ['requestId', 'goal', 'workspace'], properties: {
+        requestId: { type: 'string', minLength: 1, maxLength: 200 }, goal: { type: 'string', minLength: 1, maxLength: 10000 }, workspace: { type: 'string', minLength: 1, maxLength: 80 },
+      } }, execute: bridge.request },
   ];
   const disposers = [];
   try {
-    for (const definition of definitions) disposers.push(ctx.tools.register({ ...definition, output, timeoutMs: 35000, isConcurrencySafe: () => true }));
+    for (const definition of definitions) disposers.push(ctx.tools.register({ ...definition, output, timeoutMs: 35000, isConcurrencySafe: () => definition.name !== 'personal_agent_request' }));
   } catch (error) { for (const dispose of disposers.reverse()) dispose(); throw error; }
   return () => { for (const dispose of disposers.reverse()) dispose(); };
 }

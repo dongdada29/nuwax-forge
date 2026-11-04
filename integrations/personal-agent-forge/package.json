@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Explicit local PA reads and non-submitting native DSH request previews",
+  "description": "Explicit local PA reads, request previews and operator-enabled restricted intake",
   "exports": { ".": "./index.mjs", "./client": "./client.mjs", "./bridge": "./bridge.mjs" },
-  "files": ["index.mjs", "client.mjs", "bridge.mjs", "config.mjs", "projection.mjs"],
+  "files": ["index.mjs", "client.mjs", "bridge.mjs", "config.mjs", "projection.mjs", "admission.mjs"],
   "scripts": { "test": "node --test test/*.test.mjs" }
 }
