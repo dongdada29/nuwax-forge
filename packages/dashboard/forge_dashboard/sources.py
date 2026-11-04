@@ -119,6 +119,42 @@ def task_store_tasks(path):
     return out
 
 
+def _agent_budget_observation(manifest, request):
+    """Partial reports prove only an excess, never a successful settlement."""
+    if 'observedBudget' not in manifest:
+        return None
+    raw = manifest['observedBudget']
+    unknown = {'reportedTokensLowerBound': None, 'maxTokens': None,
+               'verdict': 'unknown', 'issue': '观测字段无效或冲突，需核对来源。'}
+    if not isinstance(raw, dict):
+        return unknown
+
+    def count(value):
+        # Match the producer's Number.isSafeInteger, excluding Python bool/int aliasing.
+        return value if type(value) is int and 0 <= value <= 9007199254740991 else None
+
+    lower = count(raw.get('reportedTokensLowerBound'))
+    maximum = count(raw.get('maxTokens'))
+    if maximum is None or maximum == 0:
+        return unknown
+    if raw.get('reportedTokensLowerBound') is not None and lower is None:
+        return unknown
+    budget = request.get('budget')
+    if not isinstance(budget, dict):
+        return unknown
+    requested = count(budget.get('maxTokens'))
+    if requested is None or requested != maximum:
+        return unknown
+    expected = 'exceeds' if lower is not None and lower > maximum else 'unknown'
+    if raw.get('verdict') != expected:
+        return unknown
+    charged = count(manifest.get('chargedTokens'))
+    if manifest.get('usageKnown') is True and charged is not None and lower is not None and lower > charged:
+        return {**unknown, 'settlementConflict': True}
+    return {'reportedTokensLowerBound': lower, 'maxTokens': maximum,
+            'verdict': expected, 'issue': ''}
+
+
 def agent_state_record(path):
     p = Path(path).resolve(strict=True)
     manifest = json.loads((p / 'manifest.json').read_text(encoding='utf-8'))
@@ -128,12 +164,17 @@ def agent_state_record(path):
     if manifest.get('modelDispatched') is not True:
         return None
     runtime = request.get('runtime') if isinstance(request.get('runtime'), dict) else {}
+    observation = _agent_budget_observation(manifest, request)
+    tokens = _tokens(manifest.get('chargedTokens')) if manifest.get('usageKnown') is True else None
+    if observation and observation.get('settlementConflict'):
+        tokens = None
     events = [{'status': 'started', 'at': manifest.get('startedAt'), 'summary': ''}]
     events.append({'status': manifest.get('status'), 'at': manifest.get('finishedAt'),
                    'summary': _text(manifest.get('reason')), **delivery_fields(manifest)})
     return {'source': 'forge-agent', 'taskKey': manifest.get('taskKey'), 'attemptId': None,
             'executor': _text(runtime.get('kind')), 'role': 'worker', 'model': _text(runtime.get('model')),
-            'status': manifest.get('status'), 'tokens': _tokens(manifest.get('chargedTokens')) if manifest.get('usageKnown') is True else None,
+            'status': manifest.get('status'), 'tokens': tokens,
+            'observedBudget': observation, 'statePath': str(p),
             'modelCalls': None, 'at': manifest.get('finishedAt') or manifest.get('startedAt'),
             'events': events, **delivery_fields(manifest)}
 
