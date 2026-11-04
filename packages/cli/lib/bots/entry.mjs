@@ -8,12 +8,15 @@ Usage: node packages/cli/lib/bots/entry.mjs <plan|prepare|check|run> --root <new
   plan     Show pinned artifact, owned paths and native DSH commands; no writes
   prepare  Create an isolated web profile; install verified ds-bot@0.2.7 without scripts
            Optional --tarball <absolute-original-npm-tgz> avoids artifact download
+           Optional --forge-config <absolute-operator-json> binds the native Forge bridge
   check    Check DSH version, artifact, original exports/files and composed entries
   run      Explicit foreground web host on 127.0.0.1; --port <0..65535>, default 0
            Optional --open opens the native local link in your default browser
            Ctrl-C stops the host; reuse the same root to keep the team
 Requires DSH 0.2.1-rc.5. No existing profile or credentials are imported.
+Bridge is disabled by default. Bound check/run reuse the config path and reject drift.
 First-use walkthrough: docs/BOT-QUICKSTART.md
+Bridge composition: docs/BOT-BRIDGE-COMPOSITION.md
 `;
 
 export function parseBotArgs(argv) {
@@ -23,12 +26,12 @@ export function parseBotArgs(argv) {
   const options = {}; const seen = new Set();
   for (let i = 0; i < rest.length; i++) {
     const key = rest[i];
-    if (!['--root', '--dsh', '--tarball', '--port', '--json', '--open'].includes(key) || seen.has(key)) throw new Error('Unknown or duplicate option: ' + key);
+    if (!['--root', '--dsh', '--tarball', '--port', '--json', '--open', '--forge-config'].includes(key) || seen.has(key)) throw new Error('Unknown or duplicate option: ' + key);
     seen.add(key);
     if (key === '--json') { options.json = true; continue; }
     if (key === '--open') { options.open = true; continue; }
     if (rest[i + 1] === undefined || rest[i + 1].startsWith('--')) throw new Error('Missing value: ' + key);
-    options[{ '--root': 'root', '--dsh': 'binary', '--tarball': 'tarball', '--port': 'port' }[key]] = rest[++i];
+    options[{ '--root': 'root', '--dsh': 'binary', '--tarball': 'tarball', '--port': 'port', '--forge-config': 'forgeConfig' }[key]] = rest[++i];
   }
   if (options.tarball && command !== 'prepare') throw new Error('--tarball is only supported by prepare');
   if (options.open && command !== 'run') throw new Error('--open is only supported by run');
@@ -54,7 +57,7 @@ export async function runBotCommand(parsed) {
     return;
   }
   const result = command === 'plan' ? botPlan(options) : command === 'prepare' ? await prepareBot(options) : checkBot(options);
-  process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : `${command}: ${result.pin.name}@${result.pin.version}; DSH ${result.dshVersion ?? result.pin.dshVersion}; profile ${result.paths.profile}\nroot: ${result.paths.root}\ninstallation: ${result.acceptance.installation}; composition: ${result.acceptance.composition}; host/UI/model behavior: not run\n`);
+  process.stdout.write(options.json ? JSON.stringify(result, null, 2) + '\n' : `${command}: ${result.pin.name}@${result.pin.version}; DSH ${result.dshVersion ?? result.pin.dshVersion}; profile ${result.paths.profile}\nroot: ${result.paths.root}\nForge bridge: ${result.bridge.enabled ? 'bound; ' + result.bridge.configPath : result.bridge.requested ? 'requested; ' + result.bridge.configPath : 'disabled'}\ninstallation: ${result.acceptance.installation}; composition: ${result.acceptance.composition}; host/UI/model behavior: not run\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
