@@ -140,3 +140,5 @@ node --import /absolute/isolated-pa/node_modules/tsx/dist/loader.mjs \
 脚本每次创建新的临时 PA DB、Git 仓库与配对身份；真 HTTP 验证 intake 提交/重放/冲突和原准入事实，intake 批准/控制被 403 拒绝。独立配对的 fixture 人类通过原 PA 路由批准后才触发 marker adapter，随后故意以 fixture 错误结束，不启动付费模型、真实 Forge Worker 或生产实例。它不改 PA 源码，也不使用生产数据。真实 UI 操作、渠道 Bot、真实 Worker/模型、发布安装与业务完整闭环仍须分层验收。
 
 2026-11-04 已在上述 PA `8240f5ec` 的干净隔离 clone 通过：原 paused/admission/source 与指纹、同 key 重放、换 goal 的 409、intake 批准/控制的 403、独立 paired 人类审批均通过；marker open 在批准前为 0、批准后为 1，随后重放如实返回原 approved admission 与 marker 故意停止后的 failed 状态。模型调用及生产实例访问均为 0，临时数据已清理，PA 源码保持干净。
+
+同日原 PA **原 Web UI** 验收通过（隔离实例 `8240f5ec` + 安装版 CLI `98c5d60`，任务 `fbeb086a`）：原生配对 UI → 原生审批按钮 → Forge 单 Worker → 实际验证 exit 0 → 原生接收按钮消失并显示 accepted；最终 `completed/accepted`、admission approved、development/verification 两 stage 与 developer run 全部 completed，无活动进程。页面无横向溢出，配对横幅与验证可见。Worker 用量为确定性 marker fixture（合成 input 100 / output 10 / charged 110，非真实计费），`realProviderCalls=0`。验收收据与截图保存在本地交付目录，未入库；真实模型 Worker、渠道 Bot 派发与业务完整闭环仍待分层验收。
