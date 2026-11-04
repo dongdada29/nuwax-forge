@@ -66,4 +66,4 @@ PA 扩展带运行时凭据回调，不能走标准 JSON 插件配置：由操�
 
 1. 真实模型全流程：提交→人工批准→真实 Forge Worker（真实模型调用）→验证→接收，含短编码回复业务验收（此前仅问候通过）。
 2. 记忆与群协作：真实模型写记忆、重启回读、跨 Bot 隔离、群内 `@` 派发与管理员优先。
-3. 成本对账：PA Worker 实际模型与用量回传 Bot 与看板；查询投影当前保留 `unknown`（见 [PA-TASK-BRIDGE.md#查询投影](PA-TASK-BRIDGE.md#查询投影)），补齐导入前不硬填数。
+3. 成本对账：PA Worker 实际模型与用量回传 Bot 与看板；查询投影当前保留 `unknown`（见 [PA-TASK-BRIDGE.md#查询投影](PA-TASK-BRIDGE.md#查询投影)），补齐导入前不硬填数。看板启动注意：`packages/dashboard` 需 `PYTHONPATH=../nuwax-crew`（缺省会报 `No module named 'crew'`），台账 `usage.jsonl` 由 `crew route` 运行时写入——E 落地前页面空数据属预期。
