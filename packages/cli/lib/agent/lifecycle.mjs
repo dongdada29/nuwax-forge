@@ -24,7 +24,8 @@ function members(pid, known, inspect) {
 }
 export async function supervise(command, options = {}) {
   const { cwd, env, stdin = '', onStdout = () => {}, onStderr = () => {}, wallMs = 1000,
-    graceMs = 250, pollMs = 20, signalProcess = process.kill.bind(process), inspectProcesses = processTable } = options;
+    graceMs = 250, pollMs = 20, detached = true,
+    signalProcess = process.kill.bind(process), inspectProcesses = processTable } = options;
   const began = performance.now(), known = new Set(), signals = [], cleanupErrors = [];
   let child, closed = false, exited = false, code = null, signal = null, launchError = null, stopReason = null;
   const stop = reason => { stopReason ??= reason; };
@@ -54,7 +55,7 @@ export async function supervise(command, options = {}) {
     return alive.map(p => p.pid);
   };
   try {
-    child = spawn(command[0], command.slice(1), { cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    child = spawn(command[0], command.slice(1), { cwd, env, detached, stdio: ['pipe', 'pipe', 'pipe'] });
     if (child.pid) known.add(child.pid);
     child.once('error', e => { launchError = e.message; });
     child.once('exit', (c, s) => { exited = true; code = c; signal = s; });
@@ -84,7 +85,7 @@ export async function supervise(command, options = {}) {
 }
 export async function terminationProbe(options = {}) {
   // Trusted fixed Node, not a Codex/DSH prompt. Self-expiry limits the damage if
-  // the outer host cannot signal it. Same cwd/env/detached supervisor as run.
+  // the outer host cannot signal it. Same cwd/env/group policy as run.
   let ready = false, output = '';
   const source = 'process.stdout.write("probe-ready\\n");setTimeout(()=>process.exit(0),3000);';
   const result = await supervise([process.execPath, '-e', source], { ...options, stdin: '', wallMs: 1000,
