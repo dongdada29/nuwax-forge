@@ -14,6 +14,7 @@ const result = spawnSync(process.execPath, [
   'packages/voice-duet/tests/pilot.test.mjs',
   'integrations/dsh-dashboard/test/client.test.mjs',
   'integrations/ds-bot-forge/bridge.test.mjs',
+  'integrations/personal-agent-forge/test/bridge.test.mjs',
 ], { cwd: root, env, shell: false, stdio: 'inherit' });
 
 if (result.error) {
