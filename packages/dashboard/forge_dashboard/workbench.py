@@ -116,6 +116,7 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
         task.update(title=text(item.get('title')) or key, objective=text(item.get('objective'), 4096),
                     workspace=text(item.get('workspace')))
         _source_status(task, item, identifier(item.get('source')) or source)
+        task['deliveryStatus'] = text(item.get('deliveryStatus'))
         task['acceptance'] = [text(p, 1000) for p in item.get('acceptance', []) if isinstance(p, str)]
         task['events'].extend(item.get('events') or [])
 
