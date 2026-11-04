@@ -27,6 +27,22 @@ def delivery_html(record):
     return ''.join('<div>' + row + '</div>' for row in rows) or '<span class="dim">未记录</span>'
 
 
+def budget_observation_html(record):
+    observation = record.get('observedBudget')
+    if not isinstance(observation, dict):
+        return ''
+    lower = observation.get('reportedTokensLowerBound')
+    maximum = observation.get('maxTokens')
+    verdict = '已证实超限' if observation.get('verdict') == 'exceeds' else 'unknown（部分报告不能证明预算达标）'
+    issue = '<p class="task-notice">' + esc(observation['issue']) + '</p>' if observation.get('issue') else ''
+    return ('<div class="budget-observation"><b>本次运行的预算观察</b>'
+            f'<p class="dim">运行状态目录：{esc(record.get("statePath") or "未记录")}</p>'
+            f'<p>已报告 token 下界：{esc(lower if lower is not None else "unknown")} · '
+            f'预算上限：{esc(maximum if maximum is not None else "unknown")} · 观测判定：{esc(verdict)}</p>'
+            f'<p>完整结算 token：{esc(record.get("tokens") if record.get("tokens") is not None else "unknown")}</p>'
+            + issue + '<p class="dim">下界仅代表已报告部分，单独展示，不计入已结算 token 汇总；未报告与在途消耗未知。</p></div>')
+
+
 def render_source_health(sources):
     if not sources:
         return ''
@@ -49,7 +65,7 @@ def _detail(task):
                         f'<p class="dim">{esc(record.get("source"))} · 尝试 {esc(record.get("attemptId") or "ID 未记录")} · '
                         f'{esc(record.get("role") or "角色未记录")} · {esc(record.get("model") or "模型未记录")}</p>'
                         f'<p>会话：{esc(record.get("sessionId") or "未记录")}</p>'
-                        f'<p>{esc(record.get("summary") or "")}</p>{delivery_html(record)}</li>')
+                        f'<p>{esc(record.get("summary") or "")}</p>{delivery_html(record)}{budget_observation_html(record)}</li>')
     events = ''.join(
         f'<li><time datetime="{esc(event.get("at"))}">{esc(when(event.get("at")))}</time>'
         f'<div><b>{esc(event.get("status") or "unknown")}</b><small>{esc(event.get("source") or task["source"])}'
