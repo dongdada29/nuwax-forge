@@ -1,6 +1,8 @@
 # 离线安装与回退
 
-本入口只分发五个现有执行包与 nuwax-forge 薄 Skill，不增加编排引擎或 MCP。
+本入口分发六个现有工作区包与 nuwax-forge 薄 Skill，不增加编排引擎或 MCP。
+
+原生 Bot → Forge 桥从 `integrations/ds-bot-forge` 的固定文件清单装入 CLI 的 `lib/bots/bridge-runtime`；离线 bundle 与 `npm run pack` 使用同一来源，不另装第七个包，也不改写源码目录。
 依赖 Node>=22、Python>=3.10。离线包专用 runtime 白名单只复制 CLI JS/Python、contracts schema/GUI 模块、crew Python、Stack 0.4.7 私有资源与现有验证桥接及 kit 引擎/模板（排除测试、历史设计档案与缓存；不改变普通 npm pack 的 package.json.files），不运行 npm install、不联网、不需要 registry 或 tar；分发包没有 node_modules，安装时才构建标准包解析布局。
 
 ```sh
@@ -15,7 +17,7 @@ node /absolute/new-offline-bundle/install.mjs uninstall --root /absolute/managed
 
 必须明确 host。root 默认 `~/.local/share/nuwax-forge/<host>`，Codex host-root 默认标准用户 Skill 根 `~/.agents`，DSH 必须提供已核对的 `--host-root` 或 `$DSH_HOME`（不猜默认 home）。Nuwax 必须显式 workspace，且已有 work-computer.json。路径要是绝对的 canonical realpath；拒绝任何 symlink 分量（macOS `/tmp` 请先解析为 `/private/tmp`）、根、home 祖先、相互交叠和路径穿越。不会修改 shell/PATH、平台、Hook、宿主 config 或已有会话。
 
-manifest.json 包含版本及所有文件 SHA256；内容地址版本目录 `versions/<version>-<manifest hash>` 保存原子切换前的版本。hash 是离线完整性检查，不是发布者签名；请通过可信渠道获取分发包。安装先核对全清单，再运行安装版 CLI doctor（Node/Python/五包解析），通过后才注册。公共 Skill 的 `installation.json` 仅声明 `{ "schemaVersion": 2, "command": "nuwax-forge" }`，不含用户名、绝对路径或版本。随完整版本携带的 Skill 从自身位置解析相邻 CLI；注册到宿主的副本仅增加相对 `runtimeRoot`，从该受管根的 active/history 选择当前版本，升级不改该绑定；独立共享 Skill 使用 PATH 中的标准 `nuwax-forge` 命令。旧 schemaVersion=1 只读兼容，升级后不再生成。受管状态和工作台绝对路径属于本机私有登记，不是可共享配置；跨机器安装请重新登记，完整版本及保持相对布局的运行入口可迁移。清除诊断用包解析覆盖变量，保证自检基于安装版。
+manifest.json 包含版本及所有文件 SHA256；内容地址版本目录 `versions/<version>-<manifest hash>` 保存原子切换前的版本。hash 是离线完整性检查，不是发布者签名；请通过可信渠道获取分发包。安装先核对全清单，再运行安装版 CLI doctor（Node/Python/六包解析），通过后才注册。公共 Skill 的 `installation.json` 仅声明 `{ "schemaVersion": 2, "command": "nuwax-forge" }`，不含用户名、绝对路径或版本。随完整版本携带的 Skill 从自身位置解析相邻 CLI；注册到宿主的副本仅增加相对 `runtimeRoot`，从该受管根的 active/history 选择当前版本，升级不改该绑定；独立共享 Skill 使用 PATH 中的标准 `nuwax-forge` 命令。旧 schemaVersion=1 只读兼容，升级后不再生成。受管状态和工作台绝对路径属于本机私有登记，不是可共享配置；跨机器安装请重新登记，完整版本及保持相对布局的运行入口可迁移。清除诊断用包解析覆盖变量，保证自检基于安装版。
 
 同包重装幂等；已有非受管 Skill/非空安装根拒绝。升级保留全部原版本及 byte-exact 原始 AGENTS/config。受管目标有人工修改时拒绝升级、回滚和卸载，避免覆盖。managed.json 保存原内容与版本历史；安装根应由当前用户私有保管，不要放凭据在安装包或任务 brief 中。事务文件在写入宿主前保存恢复快照；异常会尝试恢复，崩溃留下 install.lock 或 managed.json.transaction 时停止，核对快照并手动恢复后再清理，不盲目重试。
 
