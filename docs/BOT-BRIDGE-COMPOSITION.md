@@ -88,3 +88,5 @@ node --test packages/cli/test/bots-composition-host.test.mjs
 该测试把 CLI 和原生桥实际复制到两个 `versions/.../node_modules/@nuwax-ai/devkit-cli` 目录：先由旧版本公共 CLI prepare/check，再由新目录公共 CLI check/重复 prepare/run 同一 root，保留原桥入口、配置、marker 和 Chief ID。两次均不传配置地前台启动原生 DSH，核对未认证请求拒绝、原版 DS-Bot client 挂载与 Chief 等待模型。随后从自动生成的同一旧版本 row 在安装版 Electron 内加载真实 Cordis 与 `dsh-tools@0.2.1-rc.5`，执行原生 prepare/status、guard 拒绝、取消和卸载。只有 systemPrompt owner、调用 Session 与阻止模型派发的 runtime 是 fixture；任何模型命令都会写失败 marker。测试不复制凭据、不启动 Agent loop、不测试 Chief 自主工具选择或浏览器渲染。
 
 2026-11-04 首轮本机执行：CLI 全部 155 项中 139 通过、16 个显式宿主验收按预期跳过；既有桥 12 项离线测试通过。另显式运行组合宿主、旧 Bot host 和 launch 三组原生验收，10 项全部通过，模型调用为 0。升级连续性修正后，组合离线 8 项通过，真实 DSH 两版本目录复制/旧入口加载/Chief ID 保持与原生工具执行再次通过，模型调用仍为 0。安装包的 runtime 搬运与从安装包运行的验收由打包接线单独覆盖，源码测试不能替代该层结果。
+
+2026-11-04 安装层验收已通过：现用 release `0.1.0-devkit-local.1-98c5d60aecb43ab0` 的受管注册入口经 skill doctor 六包与 artifacts 一致性核对，`bots --help`/`bots plan` 只读可用；`defaultBridgeDisabled=true` 确认未配置实例默认不加载桥；新装的七文件桥运行组与旧装逐字节一致（各文件 SHA256 已入验收收据），按其复用范围沿用既有安装验收（原生 prepare/status、SRI/client、无模型 SIGINT 关闭），未重复全量测试。本次 `dshStartedThisCheck=false`、模型调用 0、provider 根未改动；收据不构成新的 PA intake 或 provider 验收。
