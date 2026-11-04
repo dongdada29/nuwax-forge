@@ -30,7 +30,7 @@ CLI 对 5 个兄弟包用**精确同版本**依赖（workspace 内本地链接�
 
 ## 快速开始（真实命令）
 
-新远端：[nuwax-ai/nuwax-forge](https://github.com/nuwax-ai/nuwax-forge.git)。
+新远端：[dongdada29/nuwax-forge](https://github.com/dongdada29/nuwax-forge.git)。
 
 ```sh
 cd nuwax-forge # 新 clone 目录；已有 checkout 继续使用原目录
