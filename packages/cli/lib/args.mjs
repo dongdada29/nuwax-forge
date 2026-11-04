@@ -9,7 +9,7 @@ export const USAGE = `用法：
   nuwax-forge dsh-plugin <add|remove|inspect|run> --profile <DSH profile> [--package <npm包或路径>] [--binary <dsh>]
   nuwax-forge bots <plan|prepare|check|run> --root <独立绝对目录> --dsh <DSH绝对路径> [--json]
   nuwax-forge bots run --root <已准备目录> --dsh <DSH绝对路径> [--port <0..65535>] [--open]
-  nuwax-forge dashboard --ledger <JSONL> --registry <JSON> (--out <HTML> | --serve) [--port <0..65535>] [--refresh-seconds <5..3600>] [--health <JSON>] [--matrix <JSON>] [--task-store <tasks.sqlite>] [--agent-state <state目录>] [--agent-state-root <目录>] [--host-budget <guard.json>] [--approval-store <approvals.sqlite>] [--embed-origin <DSH Web origin>] [--python <解释器>]
+  nuwax-forge dashboard --ledger <JSONL> --registry <JSON> (--out <HTML> | --serve) [--port <0..65535>] [--refresh-seconds <5..3600>] [--health <JSON>] [--matrix <JSON>] [--task-store <tasks.sqlite>] [--agent-state <state目录>] [--agent-state-root <目录>] [--host-budget <guard.json>] [--approval-store <approvals.sqlite>] [--personal-agent-snapshot <PA 导出 JSON>] [--embed-origin <DSH Web origin>] [--python <解释器>]
   nuwax-forge doctor [--json]
   nuwax-forge agent doctor --runtime <codex|deepseek-harness> [--binary <可信绝对路径>] --json
   nuwax-forge agent prepare --spec <agent JSON> --brief-file <短任务书> --state <新仓外目录>

@@ -1,0 +1,24 @@
+{
+  "kind": "personal-agent-snapshot",
+  "schemaVersion": 1,
+  "instances": [{
+    "instanceId": "fixture-pa",
+    "exportedAt": "2026-11-04T03:00:00Z",
+    "snapshots": [{
+      "task": {
+        "id": "task/native/full-id", "commandId": "create-fixture", "goal": "检查只读投影",
+        "status": "completed", "deliveryStatus": "pending", "pauseRequested": false,
+        "activeAttemptId": null, "engine": "fake", "createdAt": "2026-11-04T01:00:00Z",
+        "updatedAt": "2026-11-04T02:00:00Z", "branchName": "pa/fixture"
+      },
+      "events": [
+        {"seq": 2, "taskId": "task/native/full-id", "attemptId": "attempt-1", "type": "task.completed", "data": {}, "createdAt": "2026-11-04T02:00:00Z"},
+        {"seq": 1, "taskId": "task/native/full-id", "attemptId": "attempt-1", "type": "task.running", "data": {}, "createdAt": "2026-11-04T01:00:00Z"}
+      ],
+      "artifacts": [{"id": "artifact-1", "taskId": "task/native/full-id", "attemptId": "attempt-1", "kind": "markdown", "name": "交付说明", "content": "本地 fixture，未执行真实模型。", "createdAt": "2026-11-04T02:00:00Z"}],
+      "cursor": 2,
+      "runs": [{"id": "run-1", "taskId": "task/native/full-id", "attemptId": "attempt-1", "stageId": "stage-1", "role": "developer", "mode": "default", "status": "completed", "startedAt": "2026-11-04T01:00:00Z", "endedAt": "2026-11-04T02:00:00Z"}],
+      "verifications": [{"id": "verify-1", "taskId": "task/native/full-id", "attemptId": "attempt-1", "stageId": "stage-1", "command": {"command": "echo", "args": ["fixture"]}, "exitCode": 0, "stdout": "fixture", "stderr": "", "timedOut": false, "cancelled": false, "startedAt": "2026-11-04T01:30:00Z", "endedAt": "2026-11-04T01:30:01Z"}]
+    }]
+  }]
+}
