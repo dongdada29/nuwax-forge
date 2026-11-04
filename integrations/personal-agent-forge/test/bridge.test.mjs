@@ -60,6 +60,46 @@ test('native tools register only reads and explicit preview; complete native IDs
   dispose(); assert.equal(registry.size, 0); assert.equal(f.calls.length, 2);
 });
 
+test('forge delivery event imports certified usage onto task and its run; settlement notes stay withheld', async t => {
+  const value = snapshot(); value.cursor = 3;
+  value.events.push({ seq: 3, taskId: ids.task, attemptId: ids.attempt, type: 'forge.delivery_verified', createdAt: '2026-11-04T02:00:00Z',
+    data: { runId: ids.run, usageKnown: true, chargedTokens: 110, sessionId: 'forge-sess.01', processPassed: true, agentCompleted: true,
+      budgetPassed: true, acceptancePassed: null, verifiedPatchSha256: 'a'.repeat(64), verificationIds: ['v-1'],
+      kind: 'client-agent-run-v1', observedBudget: { note: 'private-settlement-note' }, reportedTokensLowerBound: 55 } });
+  const f = await fixture(t, (_req, res) => json(res, value));
+  const result = (await f.bridge().task({ taskId: ids.task }, execute())).snapshot;
+  const usage = { known: true, inputTokens: null, outputTokens: null, chargedTokens: 110, actualModel: null, executionSessionId: 'forge-sess.01' };
+  assert.deepEqual(result.task.usage, usage); assert.deepEqual(result.runs[0].usage, usage);
+  assert.equal(JSON.stringify(result).includes('private-settlement-note'), false);
+  assert.equal(JSON.stringify(result).includes('forge.execution_bound'), false);
+});
+
+test('delivery usage stays honest: unknown degrades, inconsistent known rejects, unbound run stays unknown', async t => {
+  const withDelivery = data => { const value = snapshot(); value.cursor = 3;
+    value.events.push({ seq: 3, taskId: ids.task, attemptId: ids.attempt, type: 'forge.delivery_verified', createdAt: '2026-11-04T02:00:00Z', data });
+    return value; };
+  let value = withDelivery({ runId: ids.run, usageKnown: false, chargedTokens: 'bogus', sessionId: 42 });
+  const f = await fixture(t, (_req, res) => json(res, value));
+  const unknown = { known: null, inputTokens: null, outputTokens: null, chargedTokens: null, actualModel: null, executionSessionId: null };
+  const result = (await f.bridge().task({ taskId: ids.task }, execute())).snapshot;
+  assert.deepEqual(result.task.usage, unknown); assert.deepEqual(result.runs[0].usage, unknown);
+  for (const data of [{ runId: ids.run, usageKnown: true, chargedTokens: -1, sessionId: 's' },
+    { runId: ids.run, usageKnown: true, chargedTokens: 1.5, sessionId: 's' },
+    { runId: ids.run, usageKnown: true, chargedTokens: 110 },
+    { runId: ids.run, usageKnown: true, chargedTokens: 110, sessionId: 'bad session!' }]) {
+    value = withDelivery(data);
+    await assert.rejects(f.bridge().task({ taskId: ids.task }, execute()), code('PA_INVALID_RESPONSE'));
+  }
+  value = withDelivery({ runId: 'other-run-id', usageKnown: true, chargedTokens: 110, sessionId: 'forge-sess.01' });
+  const unbound = (await f.bridge().task({ taskId: ids.task }, execute())).snapshot;
+  assert.deepEqual(unbound.task.usage, { known: true, inputTokens: null, outputTokens: null, chargedTokens: 110, actualModel: null, executionSessionId: 'forge-sess.01' });
+  assert.deepEqual(unbound.runs[0].usage, unknown);
+  value = withDelivery({ runId: ids.run, usageKnown: true, chargedTokens: 1, sessionId: 's' });
+  value.events.push({ ...value.events[2], seq: 4 });
+  value.cursor = 4;
+  await assert.rejects(f.bridge().task({ taskId: ids.task }, execute()), code('PA_INVALID_RESPONSE'));
+});
+
 test('registration rollback disposes previously registered native tools', async t => {
   const f = await fixture(t); let live = 0, attempts = 0;
   assert.throws(() => apply({ tools: { register() { if (++attempts === 2) throw new Error('fixture registry failure'); live++; return () => live--; } } }, f.config), /fixture registry/);
