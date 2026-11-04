@@ -15,11 +15,11 @@ npm run test:integrations:offline
 | `packages/voice-duet/tests/pilot.test.mjs` | 本地固定片段的补丁、TLS 策略、模拟连接回退、trace 脱敏、补丁漂移与错误 Git revision 拒绝 | 完整固定上游的准备/注册验收 |
 | `integrations/dsh-dashboard/test/client.test.mjs` | 编译 Web 模块注册、原生 slot 注册契约、本地 Dashboard URL 校验、DSH origin 保留 | 浏览器渲染、iframe 体验及真实 DSH 装载 |
 | `integrations/ds-bot-forge/bridge.test.mjs` | 本地工具注册、prepare/status、marker 防派发、离线 reconcile 与账本一致性反例 | 真实 DSH 原生宿主 `native-smoke`、模型执行 |
-| `integrations/personal-agent-forge/test/bridge.test.mjs` | 本地 HTTP fixture 的只读查询、认证、请求预览、超时/取消/大小与来源校验 | 真实 PA 实例、数据库、HTTP 写入及原生 DSH smoke |
+| `integrations/personal-agent-forge/test/*.test.mjs` | 本地 HTTP fixture 的只读查询、显式受限提交、认证、请求预览、超时/取消/大小与来源校验 | 真实 PA 实例、数据库、原生 DSH smoke及独立 PA 端到端脚本 |
 
 Bot CLI 的测试已由 `packages/cli` workspace 进入根测试链，离线补充入口不再调用它们。
 
-当前补充入口共 39 项：默认 38 项通过（其中 Bot bridge 12 项、PA 查询桥 17 项）、1 项完整上游验收跳过。桥测试只操作本地 marker、reconcile 夹具和临时 loopback HTTP 服务，不派发模型、不连接实际 PA；`native-smoke` 不在默认入口中。跳过项是预期的 opt-in 边界；其余项失败仍会返回非零。
+PA 测试目录中的所有 `*.test.mjs` 均进入默认入口，新增的 intake 测试不会因单文件清单遗漏。桥测试只操作本地 marker、reconcile 夹具和临时 loopback HTTP 服务，不派发模型、不连接实际 PA；`native-smoke` 和独立 PA 端到端脚本不在默认入口中。完整上游验收仍按 opt-in 跳过；最新计数以本次运行输出为准，其余项失败仍会返回非零。
 
 ## 显式验收仍分开运行
 

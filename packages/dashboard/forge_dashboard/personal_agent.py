@@ -128,7 +128,7 @@ def read_snapshot(path):
                 # PA currently has no measured token/model/session fields in AgentRunRecord.
                 records.append({'source': source, 'taskKey': task_id, 'runId': run_id,
                                 'attemptId': attempt_id, 'status': run['status'],
-                                'executor': task.get('engine') if isinstance(task.get('engine'), str) and task['engine'] in {'fake', 'claude'} else None,
+                                'executor': task.get('engine') if isinstance(task.get('engine'), str) and task['engine'] in {'fake', 'claude', 'forge'} else None,
                                 'role': _text(run.get('role')) or None, 'model': None, 'tokens': None,
                                 'modelCalls': None, 'at': run.get('endedAt') or run.get('startedAt'),
                                 'summary': 'PA run ' + run_id + ' · stage ' + _text(run.get('stageId'))})
