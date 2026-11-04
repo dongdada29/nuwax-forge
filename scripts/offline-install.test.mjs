@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { fileMap, read, write, verifyBundle, safePath, snapshot } from './bundle-lib.mjs';
+import { BRIDGE_RUNTIME_FILES } from './bridge-runtime.mjs';
 
 const source = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const base = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'devkit offline '));
@@ -53,6 +54,10 @@ try {
     const m = verifyBundle(bundle); assert.equal(m.version, build.versions['@nuwax-ai/devkit-cli']);
     const files = fileMap(bundle); delete files['manifest.json']; assert.deepEqual(files, m.files);
     assert.equal(Object.keys(m.packages).length, 6);
+    for (const rel of BRIDGE_RUNTIME_FILES) {
+      assert.deepEqual(fs.readFileSync(path.join(bundle, 'payload/packages/@nuwax-ai/devkit-cli/lib/bots/bridge-runtime', rel)),
+        fs.readFileSync(path.join(source, 'integrations/ds-bot-forge', rel)));
+    }
     assert.ok(!Object.keys(files).some(f => f.includes('node_modules/') || f.includes('__pycache__') || f.includes('/test/') || f.includes('/tests/') || f.startsWith('payload/') && f.includes('/docs/')));
     for (const rel of Object.keys(files)) {
       const data = fs.readFileSync(path.join(bundle, rel));

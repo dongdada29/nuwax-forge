@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { safePath, inside, fileMap, read, write } from './bundle-lib.mjs';
+import { copyBridgeRuntime } from './bridge-runtime.mjs';
 const source = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 if (args.length !== 2 || args[0] !== '--out') throw Error('build-bundle.mjs --out <不存在的仓外绝对目录>');
@@ -43,6 +44,7 @@ for (const [dir, resources] of Object.entries(runtime)) {
     copy(path.join(root, rel), path.join(dest, rel));
   }
 }
+copyBridgeRuntime(source, path.join(out, 'payload', 'packages', '@nuwax-ai', 'devkit-cli', 'lib', 'bots', 'bridge-runtime'));
 copy(path.join(source, 'skills', 'nuwax-forge'), path.join(out, 'payload', 'skill'));
 copy(path.join(source, 'scripts', 'offline-install.mjs'), path.join(out, 'install.mjs'));
 copy(path.join(source, 'scripts', 'migrate-forge.mjs'), path.join(out, 'migrate.mjs'));
