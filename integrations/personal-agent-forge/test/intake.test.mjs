@@ -18,7 +18,7 @@ async function fixture(t, transform = (_stage, value) => value) {
     let bytes = ''; for await (const chunk of req) bytes += chunk;
     const body = bytes ? JSON.parse(bytes) : undefined;
     requests.push({ method: req.method, url: req.url, headers: req.headers, body });
-    if (override) { override(req, res); return; }
+    if (override && override(req, res) !== false) return;
     if (req.headers.authorization !== `Bearer ${token}` || req.headers.cookie !== undefined || req.headers.host !== 'pa.fixture.test') { send(res, {}, 401); return; }
     if (req.method === 'POST' && req.url === '/api/tasks') {
       const previous = tasks.get(body.commandId);
@@ -166,4 +166,21 @@ test('intake GET refuses foreign intake records and still exposes no approval/co
   await f.bridge().submitTask(args, execute()); await assert.rejects(f.bridge().tasks({}, execute()), code('PA_INVALID_RESPONSE'));
   assert.deepEqual(Object.keys(createClient(f.config)), ['listTasks', 'taskSnapshot', 'submitTask']);
   assert.equal(f.requests.every(row => row.url === '/api/tasks' || /^\/api\/tasks\/native-task-\d+$/.test(row.url)), true);
+});
+
+test('a committed POST followed by a lost confirmation GET recovers the same original task by stable replay', async t => {
+  const f = await fixture(t); f.config.timeoutMs = 30;
+  f.override((req, res) => {
+    if (req.method !== 'GET') return false;
+    res.writeHead(200, { 'content-type': 'application/json' }); res.write('{');
+  });
+  let originalCommand;
+  await assert.rejects(f.bridge().submitTask(args, execute()), failure => {
+    assert.equal(failure.code, 'PA_TIMEOUT'); assert.equal(failure.submissionState, 'unknown'); originalCommand = failure.commandId; return true;
+  });
+  assert.equal(f.tasks.size, 1); assert.equal(f.requests.filter(row => row.method === 'POST').length, 1);
+  f.override(undefined);
+  const recovered = await f.bridge().submitTask(args, execute());
+  assert.equal(recovered.commandId, originalCommand); assert.equal(recovered.replayed, true); assert.equal(recovered.submission.paTaskId, 'native-task-1');
+  assert.equal(f.tasks.size, 1); assert.equal(f.requests.filter(row => row.method === 'POST').length, 2);
 });

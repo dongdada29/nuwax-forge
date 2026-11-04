@@ -112,7 +112,7 @@ status 与 deliveryStatus 独立：completed 不等于 accepted，accepted 不�
 npm --prefix integrations/personal-agent-forge test
 ```
 
-27 项离线 HTTP fixture 测试覆盖默认关闭、独立 intake 与人类 Cookie 隔离、固定 POST/source、稳定命令重放/409、201 待审批、200 后续真实状态、指纹与跨来源核对、鉴权、状态码、重定向、大小、超时/取消、未知用量等。fixture 端口由系统分配，不扫描。公共 test runner 未被本切片修改，需显式运行该入口。
+28 项离线 HTTP fixture 测试覆盖默认关闭、独立 intake 与人类 Cookie 隔离、固定 POST/source、稳定命令重放/409、201 待审批、200 后续真实状态、指纹与跨来源核对、鉴权、状态码、重定向、大小、超时/取消、落库后丢失确认的原任务找回、未知用量等。fixture 端口由系统分配，不扫描。公共 test runner 未被本切片修改，需显式运行该入口。
 
 真实安装版 DSH 0.2.1-rc.5 的原生 registry/guard/dispatch 可复现：
 
