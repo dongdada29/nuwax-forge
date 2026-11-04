@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 
 const cli = fileURLToPath(new URL('../bin/nuwax-forge.mjs', import.meta.url));
 const entry = fileURLToPath(new URL('../lib/agent/owned-entry.mjs', import.meta.url));
@@ -80,3 +81,35 @@ test('outer group SIGKILL stops marker descendants; reconciliation cannot dispat
   const again=spawnSync(process.execPath,[entry,f.state],{detached:true,encoding:'utf8',timeout:5000});
   assert.equal(again.status,2); assert.equal(read(f.marker).pid,marker.pid);
 });
+
+for (const valid of [true,false]) test(`registered parent wrapper ${valid?'runs in its owned group':'cannot use a mismatched identity'}`, {skip:process.platform==='win32'}, t=>{
+  const f=fixture(t), wrapper=path.join(f.root,'process-owner.mjs'), id=randomUUID();
+  fs.writeFileSync(wrapper, `import fs from 'node:fs';import{spawn}from'node:child_process';
+fs.writeFileSync(${JSON.stringify(path.join(f.state,'outer-owner.json'))},JSON.stringify({kind:'personal-agent-process-owner-v1',id:${JSON.stringify(valid?id:randomUUID())},status:'active',pid:process.pid,pgid:process.pid,wrapperPath:${JSON.stringify(wrapper)},taskKey:'owned-fixture'}));
+const child=spawn(process.execPath,${JSON.stringify([entry,f.state])},{detached:false,stdio:'inherit'});child.on('exit',code=>process.exit(code??1));`);
+  const result=spawnSync(process.execPath,[wrapper,`--personal-agent-owner=${id}`],{detached:true,encoding:'utf8',timeout:15000});
+  assert.equal(result.status,valid?0:2,result.stderr);
+  if(valid){const out=JSON.parse(result.stdout);assert.equal(read(f.marker).group,out.processOwnership.ownerPid);assert.notEqual(out.processOwnership.entryPid,out.processOwnership.ownerPid);}
+  else{assert.equal(fs.existsSync(f.marker),false);assert.equal(fs.existsSync(path.join(f.state,'run.claim')),false);}
+});
+
+test('explicit PA process-owner startup gate registers before the real inherited entry runs',
+  {skip:process.platform==='win32'||!process.env.FORGE_TEST_PA_OWNER,timeout:15000}, async t=>{
+    const f=fixture(t), wrapper=fs.realpathSync(process.env.FORGE_TEST_PA_OWNER), id=randomUUID();
+    const owner=spawn(process.execPath,[wrapper,`--personal-agent-owner=${id}`],{detached:true,stdio:['ignore','pipe','pipe','pipe']});
+    t.after(()=>{try{process.kill(-owner.pid,'SIGKILL')}catch{}});
+    let stdout='',stderr='',control='',started=false;
+    owner.stdout.on('data',chunk=>stdout+=chunk);owner.stderr.on('data',chunk=>stderr+=chunk);
+    owner.stdio[3].on('data',chunk=>{
+      control+=chunk;
+      if(!started&&control.includes('"READY"')){
+        started=true;
+        fs.writeFileSync(path.join(f.state,'outer-owner.json'),JSON.stringify({kind:'personal-agent-process-owner-v1',id,status:'active',pid:owner.pid,pgid:owner.pid,wrapperPath:wrapper,taskKey:'owned-fixture'}),{flag:'wx',mode:0o600});
+        owner.stdio[3].write(JSON.stringify({type:'START',command:process.execPath,args:[entry,f.state]})+'\n');
+      }
+    });
+    const code=await new Promise((resolve,reject)=>{owner.once('error',reject);owner.once('close',resolve)});
+    assert.equal(code,0,stderr);assert.equal(started,true);
+    const result=JSON.parse(stdout);assert.equal(result.status,'completed');assert.equal(result.processOwnership.ownerPid,owner.pid);
+    assert.equal(read(f.marker).group,owner.pid);assert.equal(liveGroup(owner.pid),false);
+  });
