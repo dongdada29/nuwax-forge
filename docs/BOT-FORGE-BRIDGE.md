@@ -63,7 +63,9 @@ node integrations/ds-bot-forge/setup.mjs /absolute/operator-config.json
 
 ## 状态语义与边界
 
-`prepared`、进程通过、Agent 完成、用量已知、预算结算和产品验收分别返回。缺失文件/未知状态不当作完成，缺失用量不记 0。完整预算 `unknown` 可以同时伴随 `observedVerdict: exceeds` 的已报告下界；未运行的执行 Session 为 null。来源冲突、越界、符号链接、超大 JSON 和未知字段均拒绝。查询只覆盖本桥明确准备的 attempt；不会扫描或采用其它执行根。
+`prepared`、进程通过、Agent 完成、用量已知、预算结算和产品验收分别返回。缺失文件/未知状态不当作完成，缺失用量不记 0。完整预算与 chargedTokens 必须同时匹配 manifest、原始 usage、Forge settlement 的完整性/数值、预算上限与 usage sourceHash；单独 `usageKnown` 或 `within` 字段不能放行。缺失或冲突时 chargedTokens 为 null、完整预算为 unknown，`consistency` 标明证据状态。
+
+完整预算 `unknown` 可以同时伴随 `observedVerdict: exceeds` 的已报告下界。下界必须是非负整数，其 maxTokens 与 request 一致，verdict 与数值关系一致；有 usage/manifest/settlement 时交叉核对。缺少 settlement 时可以谨慎展示 manifest 的合法 observedBudget，并以 `observedSource: manifest` 明示来源，仍不视作完整结算。未运行的执行 Session 为 null。任务来源冲突、越界、符号链接、超大 JSON 和未知字段均拒绝。查询只覆盖本桥明确准备的 attempt；不会扫描或采用其它执行根。
 
 本切片不保证进程启动后 provider 总 token 硬上限，也不授予工作区之外的模型操作权限。工作区模板、入口文件及状态根应由操作者控制；它不防御同一操作系统账户同时恶意修改可信文件的竞态。原有 Forge run 的预算/上下文复核及一次性 claim 继续生效。
 
@@ -77,6 +79,6 @@ ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
   '/Applications/DeepSeek Harness.app/Contents/Resources' /absolute/trusted/node
 ```
 
-9 个离线测试通过：实际 Forge prepare、预算阻断、未授权 prepare、已有根、越界/参数注入、缺失/未知结算、来源冲突、符号链接、大 JSON、已启动 prepare 的取消与缺失 request/guard。所有 runtime 均为 marker fixture，无模型调用。
+12 个离线测试通过：实际 Forge prepare、预算阻断、未授权 prepare、已有根、越界/参数注入、缺失/未知结算、来源冲突、符号链接、大 JSON、已启动 prepare 的取消与缺失 request/guard；另用既有 Forge reconcile 生成真实完整结算与停止后超限结算，验证完整用量正常展示、冲突降级、下界与 manifest 回退。所有 runtime 均为 marker fixture，无模型调用。
 
 安装版 Electron 内加载了实际 Cordis 与 `dsh-tools@0.2.1-rc.5`：原生注册、prepare、status、guard 拒绝、取消前拒绝及卸载清理通过。只有 systemPrompt owner 使用 fixture，不启动 Agent loop。未进行 Chief 自主调用、Bot 聊天端到端、模型/语音、已有 profile 或 UI 验收；注册与 prepare 成功不能代替这些业务验收。

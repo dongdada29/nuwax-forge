@@ -7,10 +7,25 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { initializeBridge, createBridge } from './bridge.mjs';
 import { apply } from './index.mjs';
+import { reconcile } from '../../packages/cli/lib/agent/index.mjs';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const exec = signal => ({ agent: { session: { id: 'fixture-chief-session' } }, signal: signal ?? new AbortController().signal });
 const write = (file, value) => fs.writeFileSync(file, JSON.stringify(value));
+const read = file => JSON.parse(fs.readFileSync(file, 'utf8'));
+function settleFixture(config, prepared, { processPassed = true, inputTokens = 100, outputTokens = 10 } = {}) {
+  const state = path.join(config.stateRoot, prepared.attemptId, 'state');
+  const manifestFile = path.join(state, 'manifest.json');
+  write(manifestFile, { ...read(manifestFile), processPassed, modelDispatched: true });
+  const events = [
+    { type: 'thread.started', thread_id: 'fixture-execution-session' }, { type: 'turn.started' },
+    { type: 'item.completed', item: { type: 'agent_message', text: 'fixture result' } },
+    { type: 'turn.completed', usage: { input_tokens: inputTokens, output_tokens: outputTokens, cached_input_tokens: 80 } },
+  ];
+  fs.writeFileSync(path.join(state, 'stdout.jsonl'), events.map(row => JSON.stringify(row)).join('\n') + '\n');
+  reconcile(state); // Existing offline Forge implementation; never starts a runtime.
+  return state;
+}
 function fixture(t, maxTokens = 20000) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'forge-bot-bridge-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -97,7 +112,7 @@ test('missing/unknown state stays unknown; lower-bound excess never becomes comp
   assert.equal(value.status, 'unknown'); assert.equal(value.processPassed, null);
   assert.equal(value.budget.chargedTokens, null);
   write(path.join(state, 'manifest.json'), { taskKey: f.args.taskKey, status: 'invented-success', processPassed: true });
-  write(path.join(state, 'budget-reconcile.json'), { reconciliation: { budget: { verdict: 'unknown' } }, observedBudget: { verdict: 'exceeds', reportedTokensLowerBound: 21000 } });
+  write(path.join(state, 'budget-reconcile.json'), { reconciliation: { budget: { verdict: 'unknown' } }, observedBudget: { maxTokens: 20000, verdict: 'exceeds', reportedTokensLowerBound: 21000 } });
   value = await bridge.status({ attemptId: result.attemptId }, exec());
   assert.equal(value.status, 'unknown'); assert.equal(value.acceptancePassed, null);
   assert.equal(value.budget.verdict, 'unknown'); assert.equal(value.budget.observedVerdict, 'exceeds');
@@ -150,4 +165,74 @@ test('missing request/budget guard cannot yield runnable state or fabricated zer
   const status = await bridge.status({ attemptId: prepared.attemptId }, exec());
   assert.equal(status.status, 'unknown'); assert.equal(status.operatorRun, null);
   assert.equal(status.budget.chargedTokens, null); assert.equal(status.budget.reportedTokensLowerBound, null);
+});
+
+test('incomplete manifest cannot promote a lone settlement verdict to within or known charged usage', async t => {
+  const f = fixture(t), bridge = f.create();
+  const prepared = await bridge.prepare(f.args, exec());
+  const state = path.join(f.config.stateRoot, prepared.attemptId, 'state');
+  const manifest = path.join(state, 'manifest.json');
+  write(manifest, { ...read(manifest), usageKnown: false, chargedTokens: 100 });
+  write(path.join(state, 'budget-reconcile.json'), { reconciliation: { budget: { verdict: 'within' } } });
+  const status = await bridge.status({ attemptId: prepared.attemptId }, exec());
+  assert.equal(status.budget.usageKnown, false); assert.equal(status.budget.chargedTokens, null);
+  assert.equal(status.budget.verdict, 'unknown');
+});
+
+test('real Forge complete settlement displays known usage, while source or numeric conflicts degrade to unknown', async t => {
+  const f = fixture(t), bridge = f.create();
+  const prepared = await bridge.prepare(f.args, exec()), args = { attemptId: prepared.attemptId };
+  const state = settleFixture(f.config, prepared);
+  let status = await bridge.status(args, exec());
+  assert.equal(status.status, 'completed'); assert.equal(status.budget.usageKnown, true);
+  assert.equal(status.budget.chargedTokens, 110); assert.equal(status.budget.verdict, 'within');
+  assert.equal(status.budget.consistency, 'verified'); assert.equal(status.source.executionSessionId, 'fixture-execution-session');
+  const settlementFile = path.join(state, 'budget-reconcile.json'), original = read(settlementFile);
+  for (const change of [
+    value => { value.chargedTokens = 100; },
+    value => { value.reconciliation.sample.sourceHash = 'unrelated-usage'; },
+    value => { value.reconciliation.actual.completeness.complete = false; },
+    value => { value.reconciliation.budget.budgetTokens = 99999; },
+    value => { value.reconciliation.comparison.dimensions.find(row => row.dimension === 'totalTokens').actual = 111; },
+  ]) {
+    const changed = structuredClone(original); change(changed); write(settlementFile, changed);
+    status = await bridge.status(args, exec());
+    assert.equal(status.budget.usageKnown, null); assert.equal(status.budget.chargedTokens, null);
+    assert.equal(status.budget.verdict, 'unknown'); assert.equal(status.budget.consistency, 'conflict');
+  }
+  write(settlementFile, original);
+  const manifestFile = path.join(state, 'manifest.json');
+  write(manifestFile, { ...read(manifestFile), usageKnown: false });
+  status = await bridge.status(args, exec());
+  assert.equal(status.budget.chargedTokens, null); assert.equal(status.budget.verdict, 'unknown');
+});
+
+test('real interrupted Forge overflow stays a lower bound, including manifest fallback; malformed observations are unknown', async t => {
+  const f = fixture(t), bridge = f.create();
+  const prepared = await bridge.prepare(f.args, exec()), args = { attemptId: prepared.attemptId };
+  const state = settleFixture(f.config, prepared, { processPassed: false, inputTokens: 25000, outputTokens: 50 });
+  let status = await bridge.status(args, exec());
+  assert.equal(status.budget.usageKnown, false); assert.equal(status.budget.chargedTokens, null);
+  assert.equal(status.budget.verdict, 'unknown'); assert.equal(status.budget.observedVerdict, 'exceeds');
+  assert.equal(status.budget.reportedTokensLowerBound, 25050); assert.equal(status.budget.observedSource, 'settlement');
+  const settlementFile = path.join(state, 'budget-reconcile.json'), originalSettlement = read(settlementFile);
+  fs.unlinkSync(settlementFile);
+  status = await bridge.status(args, exec());
+  assert.equal(status.budget.observedVerdict, 'exceeds'); assert.equal(status.budget.reportedTokensLowerBound, 25050);
+  assert.equal(status.budget.observedSource, 'manifest'); assert.equal(status.budget.chargedTokens, null);
+  const manifestFile = path.join(state, 'manifest.json'), originalManifest = read(manifestFile);
+  for (const change of [
+    value => { value.maxTokens = 99999; }, value => { value.reportedTokensLowerBound = -1; },
+    value => { value.reportedTokensLowerBound = '25050'; }, value => { value.reportedTokensLowerBound = 100; },
+    value => { value.verdict = 'unknown'; },
+  ]) {
+    const changed = structuredClone(originalManifest); change(changed.observedBudget); write(manifestFile, changed);
+    status = await bridge.status(args, exec());
+    assert.equal(status.budget.observedVerdict, 'unknown'); assert.equal(status.budget.reportedTokensLowerBound, null);
+  }
+  write(manifestFile, originalManifest);
+  const conflicting = structuredClone(originalSettlement); conflicting.observedBudget.reportedTokensLowerBound = 25051;
+  write(settlementFile, conflicting);
+  status = await bridge.status(args, exec());
+  assert.equal(status.budget.observedVerdict, 'unknown'); assert.equal(status.budget.consistency, 'conflict');
 });

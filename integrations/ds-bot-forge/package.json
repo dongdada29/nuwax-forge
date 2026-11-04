@@ -5,5 +5,5 @@
   "type": "module",
   "description": "Native DSH tools for explicit Forge status and bounded task preparation",
   "exports": { ".": "./index.mjs", "./locale/*.json": "./locale/*.json", "./icon": "./icon.svg" },
-  "files": ["index.mjs", "bridge.mjs", "setup.mjs", "locale", "icon.svg"]
+  "files": ["index.mjs", "bridge.mjs", "projection.mjs", "setup.mjs", "locale", "icon.svg"]
 }

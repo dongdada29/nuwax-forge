@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants, openSync, closeSync, readFileSync, writeFileSync, mkdirSync, lstatSync, fstatSync, realpathSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { projectBudget } from './projection.mjs';
 
 const KIND = 'forge-bot-bridge-v1';
 const assert = (ok, message) => { if (!ok) throw new Error(message); };
@@ -171,16 +172,12 @@ export function createBridge(raw) {
     if (manifest) assert(manifest.taskKey === source.taskKey, 'Forge manifest task provenance mismatch');
     const knownStatuses = ['prepared', 'blocked', 'running', 'failed', 'completed'];
     const value = key => typeof manifest?.[key] === 'boolean' ? manifest[key] : null;
-    const tokens = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
     return {
       attemptId: a, taskKey: source.taskKey, attempt: 1, workspace: source.workspace,
       source: { kind: KIND, callingSessionId: source.callingSessionId, executionSessionId: typeof usage?.observation?.sessionId === 'string' ? usage.observation.sessionId : null, state: confined(config, a, 'state') },
       status: request && knownStatuses.includes(manifest?.status) ? manifest.status : 'unknown', reason: typeof manifest?.reason === 'string' ? manifest.reason : null,
       modelDispatched: value('modelDispatched'), processPassed: value('processPassed'), agentCompleted: value('agentCompleted'), acceptancePassed: value('acceptancePassed'),
-      budget: { usageKnown: value('usageKnown'), chargedTokens: tokens(manifest?.chargedTokens),
-        verdict: ['within', 'exceeds', 'unknown'].includes(settlement?.reconciliation?.budget?.verdict) ? settlement.reconciliation.budget.verdict : 'unknown',
-        observedVerdict: settlement?.observedBudget?.verdict === 'exceeds' ? 'exceeds' : 'unknown',
-        reportedTokensLowerBound: tokens(settlement?.observedBudget?.reportedTokensLowerBound) },
+      budget: projectBudget({ manifest, request, guard, settlement, usage }),
       operatorRun: manifest?.status === 'prepared' && request && guard?.allowed === true ? { requiresOperatorAuthorization: true, argv: [config.nodeBinary, config.forgeEntry, 'agent', 'run', '--state', confined(config, a, 'state')] } : null,
     };
   };
