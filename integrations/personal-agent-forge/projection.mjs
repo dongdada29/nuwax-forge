@@ -1,4 +1,5 @@
 import { check, identifier, record } from './config.mjs';
+import { validateSource } from './admission.mjs';
 
 const RESPONSE = 'PA_INVALID_RESPONSE';
 const statuses = ['queued', 'running', 'waiting_human', 'paused', 'interrupted', 'completed', 'failed', 'cancelled'];
@@ -18,14 +19,23 @@ const unique = (rows, key) => {
 };
 const unknownUsage = () => ({ known: null, inputTokens: null, outputTokens: null, chargedTokens: null, actualModel: null, executionSessionId: null });
 
-function task(value, config) {
+export function projectTask(value, config) {
   check(record(value), RESPONSE, 'PA task is invalid.');
   const taskId = identifier(value.id, RESPONSE);
   check(statuses.includes(value.status) && deliveries.includes(value.deliveryStatus), RESPONSE, 'PA task state is invalid.');
-  check(value.engine === undefined || ['fake', 'claude'].includes(value.engine), RESPONSE, 'PA engine is unsupported.');
+  check(value.engine === undefined || ['fake', 'claude', 'forge'].includes(value.engine), RESPONSE, 'PA engine is unsupported.');
+  if (config.auth.mode === 'intake') check(value.intakeId === config.auth.intakeId, RESPONSE, 'PA returned a task from a different intake identity.');
+  let admission = null;
+  if (value.admission !== undefined) {
+    check(record(value.admission) && ['pending', 'approved', 'rejected', 'expired'].includes(value.admission.status)
+      && /^[a-f0-9]{64}$/.test(value.admission.fingerprint), RESPONSE, 'PA task admission is invalid.');
+    admission = { approvalId: identifier(value.admission.approvalId, RESPONSE), fingerprint: value.admission.fingerprint, status: value.admission.status };
+  }
   return {
     taskRef: { source: `personal-agent:${config.instanceId}`, taskKey: taskId }, taskId,
     commandId: optionalId(value.commandId), goal: text(value.goal), status: value.status, deliveryStatus: value.deliveryStatus,
+    workspaceId: optionalId(value.workspaceId), intakeId: optionalId(value.intakeId),
+    source: value.source === undefined ? null : validateSource(value.source), sourceAuthenticated: false, admission,
     activeAttemptId: optionalId(value.activeAttemptId), activeAttemptKnown: Object.hasOwn(value, 'activeAttemptId'),
     engine: value.engine ?? null, pauseRequested: typeof value.pauseRequested === 'boolean' ? value.pauseRequested : null,
     createdAt: value.createdAt === undefined ? null : text(value.createdAt, 128),
@@ -36,14 +46,14 @@ function task(value, config) {
 
 export function projectTaskList(value, config) {
   check(record(value), RESPONSE, 'PA task list is invalid.');
-  return unique(array(value.tasks, config).map(row => task(row, config)), 'taskId');
+  return unique(array(value.tasks, config).map(row => projectTask(row, config)), 'taskId');
 }
 
 // Allowlisted facts only. In particular, config snapshots, verification argv,
 // permission rawInput, model settings, and arbitrary event payloads stay in PA.
 export function projectSnapshot(value, expectedId, config) {
   check(record(value), RESPONSE, 'PA task snapshot is invalid.');
-  const projectedTask = task(value.task, config);
+  const projectedTask = projectTask(value.task, config);
   check(projectedTask.taskId === expectedId, RESPONSE, 'PA returned a different task identity.');
   check(Number.isSafeInteger(value.cursor) && value.cursor >= 0, RESPONSE, 'PA event cursor is invalid.');
   const linked = row => {
@@ -67,7 +77,8 @@ export function projectSnapshot(value, expectedId, config) {
     verifications: collection('verifications', row => ({ ...identity(row), stageId: optionalId(row.stageId),
       exitCode: Number.isSafeInteger(row.exitCode) ? row.exitCode : null,
       timedOut: typeof row.timedOut === 'boolean' ? row.timedOut : null, cancelled: typeof row.cancelled === 'boolean' ? row.cancelled : null })),
-    approvals: collection('approvals', row => ({ ...identity(row), runId: optionalId(row.runId), status: text(row.status, 100) })),
+    approvals: collection('approvals', row => ({ ...identity(row), runId: optionalId(row.runId), status: text(row.status, 100),
+      kind: row.kind ?? 'tool_permission', fingerprint: row.kind === 'task_admission' ? text(row.fingerprint, 64) : null })),
     historyComplete: null,
   };
   // Optional historical collections may be absent. When both ends are present,

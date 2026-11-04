@@ -42,8 +42,9 @@ const code = expected => failure => { assert.equal(failure.code, expected); retu
 test('native tools register only reads and explicit preview; complete native IDs survive projection', async t => {
   const f = await fixture(t), registry = new Map();
   const dispose = apply({ tools: { register(definition) { registry.set(definition.name, definition); return () => registry.delete(definition.name); } } }, f.config);
-  assert.deepEqual([...registry.keys()], ['personal_agent_tasks', 'personal_agent_task', 'personal_agent_request_preview']);
-  assert.ok([...registry.values()].every(row => row.isConcurrencySafe()));
+  assert.deepEqual([...registry.keys()], ['personal_agent_tasks', 'personal_agent_task', 'personal_agent_request_preview', 'personal_agent_request']);
+  assert.equal(registry.get('personal_agent_request').isConcurrencySafe(), false);
+  assert.ok([...registry.values()].filter(row => row.name !== 'personal_agent_request').every(row => row.isConcurrencySafe()));
   const list = await registry.get('personal_agent_tasks').execute({}, execute());
   assert.equal(list.source.botId, ids.bot); assert.equal(list.source.callingSessionId, ids.session); assert.equal(list.source.toolCallId, ids.call);
   assert.equal(list.tasks[0].taskId, ids.task);

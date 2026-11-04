@@ -30,7 +30,7 @@ try {
   ctx = new Context(); await ctx.plugin(PromptFixture); await ctx.plugin(ToolRuntime, { mode: 'native' });
   const fiber = ctx.plugin(bridge, { schemaVersion: 1, origin: `http://127.0.0.1:${server.address().port}`, instanceId: 'native-fixture', botId: 'native-fixture-bot', auth: { mode: 'loopback' } });
   await fiber;
-  assert.deepEqual(ctx.tools.schemas().map(row => row.name), ['personal_agent_tasks', 'personal_agent_task', 'personal_agent_request_preview']);
+  assert.deepEqual(ctx.tools.schemas().map(row => row.name), ['personal_agent_tasks', 'personal_agent_task', 'personal_agent_request_preview', 'personal_agent_request']);
   const call = (name, args, signal = new AbortController().signal) => ctx.tools.execute({ name, callId: 'native-fixture-call', arguments: args, signal, agent: { session: { id: 'native-fixture-session' } } });
   const list = await call('personal_agent_tasks', {});
   assert.equal(list.isError, false); assert.equal(list.value.tasks[0].taskId, 'native-pa-fixture-task'); assert.equal(reads, 1);
