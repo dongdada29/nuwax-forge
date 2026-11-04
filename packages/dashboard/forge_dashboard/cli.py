@@ -33,7 +33,7 @@ def load_dashboard(args):
     health_data = json.loads(h.read_text(encoding="utf-8")) if h and h.exists() else {}
     m = Path(args.matrix) if args.matrix else None
     matrix = json.loads(m.read_text(encoding="utf-8")) if m and m.exists() else []
-    inputs = [Path(x).resolve() for x in (args.ledger, args.registry, args.health, args.matrix, args.task_store, args.host_budget, args.approval_store) if x]
+    inputs = [Path(x).resolve() for x in (args.ledger, args.registry, args.health, args.matrix, args.task_store, args.host_budget, args.approval_store, getattr(args, 'personal_agent_snapshot', None)) if x]
     agent_dirs = {Path(args.agent_state).resolve(strict=True)} if args.agent_state else set()
     if args.agent_state_root:
         root = Path(args.agent_state_root).resolve(strict=True)
@@ -66,6 +66,12 @@ def load_dashboard(args):
         record = adapters.read('forge-agent', directory)
         if record is not None:
             records.append(record)
+    pa_path = getattr(args, 'personal_agent_snapshot', None)
+    pa = adapters.read('personal-agent', pa_path) if pa_path else {'tasks': [], 'records': [], 'exports': []}
+    task_items.extend(pa['tasks'])
+    records.extend(pa['records'])
+    if pa_path:
+        notes.append('Personal Agent：显式导出快照，仅供查看；人工控制与接收/退回请在 PA 工作台操作。快照新鲜不证明进程存活。')
     from crew import approvals
     approval_items = approvals.list_requests(args.approval_store) if args.approval_store else None
     def latest(values):
@@ -76,12 +82,13 @@ def load_dashboard(args):
         source_health('执行器注册表', args.registry, snapshot=True),
         source_health('执行器健康快照', args.health),
         source_health('任务矩阵', args.matrix, snapshot=True),
-        source_health('Stack 任务库', args.task_store, last_at=latest(e.get('at') for t in task_items for e in t.get('events', []))),
+        source_health('Stack 任务库', args.task_store, last_at=latest(e.get('at') for t in task_items if t.get('source') == 'stack' for e in t.get('events', []))),
         source_health('任务审批', args.approval_store, snapshot=True),
         source_health('宿主预算快照', args.host_budget),
         source_health('Forge Agent 状态', args.agent_state_root or args.agent_state,
                       last_at=latest(r.get('at') for r in records if r.get('source') == 'forge-agent')),
     ]
+    states.extend(source_health(export['source'] + ' 导出快照', pa_path, last_at=export['exportedAt']) for export in pa['exports'])
     return dict(usage=data, registry=reg, health=health_data, matrix=matrix, flow_rows=flow_rows,
                 records=records, notes=notes, approval_items=approval_items,
                 approvals_actionable=bool(args.serve and args.approval_store),
@@ -235,7 +242,7 @@ def cmd_dashboard_server(args) -> int:
 def add_arguments(p):
     p.add_argument("--ledger", required=True)
     p.add_argument("--registry", required=True)
-    for name in ("health", "matrix", "task-store", "agent-state", "agent-state-root", "host-budget", "approval-store", "embed-origin", "out"):
+    for name in ("health", "matrix", "task-store", "agent-state", "agent-state-root", "host-budget", "approval-store", "personal-agent-snapshot", "embed-origin", "out"):
         p.add_argument("--" + name, default=None)
     p.add_argument("--serve", action="store_true")
     p.add_argument("--port", type=int, default=0)

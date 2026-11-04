@@ -1,5 +1,6 @@
 """Explicit source adapters. Registration is in-process; no automatic plugin loading."""
 from . import sources
+from .personal_agent import read_snapshot
 
 
 class AdapterRegistry:
@@ -23,4 +24,5 @@ def default_adapters():
     registry.register('stack', sources.task_store_records)
     registry.register('host-guard', sources.host_guard_records)
     registry.register('forge-agent', sources.agent_state_record)
+    registry.register('personal-agent', read_snapshot)
     return registry

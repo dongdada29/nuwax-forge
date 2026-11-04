@@ -68,6 +68,8 @@ def _detail(task):
                '历史无尝试 ID 的记录无法可靠配对。</p>') if task['runningUnverified'] else ''
     source_status = (f'<p class="dim">任务来源状态：{esc(task["sourceStatus"])} · {esc(task["sourceStatusSource"])} · '
                      f'{esc(when(task["sourceStatusAt"]))}</p>') if task['sourceStatus'] else ''
+    if task.get('deliveryStatus'):
+        source_status += f'<p>来源交付状态：{esc(task["deliveryStatus"])}（与执行结果分别记录）</p>'
     latest = task['latestAttempt']
     attempt_status = (f'<p>最近尝试记录：{esc(latest.get("status") or "unknown")} · {esc(latest.get("source"))} · '
                       f'{esc(when(latest.get("at")))}'
