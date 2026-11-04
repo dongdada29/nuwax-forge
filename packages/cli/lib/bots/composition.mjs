@@ -2,7 +2,7 @@
 // does not import that bridge unless prepare opts in; Bot tools remain unchanged.
 import { createHash } from 'node:crypto';
 import { constants, closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const assert = (ok, message) => { if (!ok) throw new Error(message); };
@@ -29,9 +29,14 @@ function runtime() {
   const packaged = resolve(fileURLToPath(new URL('./bridge-runtime/', import.meta.url)));
   const source = resolve(fileURLToPath(new URL('../../../../integrations/ds-bot-forge/', import.meta.url)));
   const root = lstatSync(packaged, { throwIfNoEntry: false }) ? packaged : source;
+  return runtimeAt(root);
+}
+
+function runtimeAt(root) {
   const stat = lstatSync(root);
   assert(stat.isDirectory() && !stat.isSymbolicLink(), 'Native bridge runtime must be a real directory');
   const canonical = realpathSync(root);
+  assert(canonical === root, 'Native bridge runtime path changed');
   const files = {};
   for (const name of FILES) {
     let cursor = canonical;
@@ -43,6 +48,16 @@ function runtime() {
   }
   assert(JSON.parse(regular(join(canonical, 'package.json'))).name === '@nuwax-ai/ds-bot-forge-bridge', 'Unexpected native bridge runtime');
   return { entry: join(canonical, 'index.mjs'), files };
+}
+
+// A managed CLI upgrade changes its version directory. An existing team keeps
+// its explicitly authorized runtime; never switch it to the new CLI's code.
+function boundRuntime(binding) {
+  const entry = binding.entry;
+  assert(typeof entry === 'string' && isAbsolute(entry) && resolve(entry) === entry && !/[\x00-\x1f]/.test(entry) && basename(entry) === 'index.mjs', 'Invalid bound native bridge entry');
+  const native = runtimeAt(dirname(entry));
+  assert(native.entry === entry && JSON.stringify(native.files) === JSON.stringify(binding.files), 'Bound native bridge runtime drifted; restore the authorized runtime');
+  return native;
 }
 
 function readOperator(file) {
@@ -105,8 +120,7 @@ export function inspectBridge(paths, marker, requested) {
   const source = readOperator(binding.configPath);
   if (requested !== undefined) assert(readOperator(requested).configPath === binding.configPath, 'Forge bridge is bound to another operator config path');
   assert(source.configPath === binding.configPath && source.sourceHash === binding.sourceHash, 'Operator bridge config drifted; use a new Bot root');
-  const native = runtime();
-  assert(native.entry === binding.entry && JSON.stringify(native.files) === JSON.stringify(binding.files), 'Native bridge runtime drifted; use a new Bot root');
+  const native = boundRuntime(binding);
   const bytes = regular(paths.bridgePatch);
   assert(hash(bytes) === binding.patchHash, 'Managed bridge patch drifted; use a new Bot root');
   assert(hash(regular(join(paths.profileDir, 'cordis.patch.yml'))) === binding.profilePatchHash, 'Managed Bot profile patch drifted; use a new Bot root');

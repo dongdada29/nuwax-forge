@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { bridgeReport, inspectBridge, prepareBridge } from '../lib/bots/composition.mjs';
 import { botPaths, botPlan } from '../lib/bots/profile.mjs';
 import { parseBotArgs } from '../lib/bots/entry.mjs';
-import { bridgeFixture } from './helpers/bots-bridge-fixture.mjs';
+import { bridgeFixture, copyBotCli } from './helpers/bots-bridge-fixture.mjs';
 
 function compositionFixture(t) {
   const f = bridgeFixture(t), paths = botPaths(path.join(f.parent, 'bots'));
@@ -134,4 +134,30 @@ test('packaged bridge is preferred and every bound runtime file is checked; dama
   assert.throws(() => module.inspectBridge(f.paths, f.marker), /ENOENT/);
   const moved = runtime + '-target'; fs.renameSync(runtime, moved); fs.symlinkSync(moved, runtime);
   assert.throws(() => module.inspectBridge(f.paths, f.marker), /real directory/);
+});
+
+test('CLI relocation retains the bound old runtime and config; new teams use current code and old drift still fails', async t => {
+  const f = compositionFixture(t);
+  const oldVersion = path.join(f.parent, 'versions/old/node_modules/@nuwax-ai/devkit-cli');
+  copyBotCli(f.repo, oldVersion);
+  const oldModule = await import(pathToFileURL(path.join(oldVersion, 'lib/bots/composition.mjs')).href);
+  await f.prepare(oldModule);
+  const originalBinding = structuredClone(f.marker.bridge), originalPatch = fs.readFileSync(f.paths.bridgePatch);
+  const newVersion = path.join(f.parent, 'versions/new/node_modules/@nuwax-ai/devkit-cli');
+  fs.cpSync(path.dirname(oldVersion), path.dirname(newVersion), { recursive: true });
+  const newModule = await import(pathToFileURL(path.join(newVersion, 'lib/bots/composition.mjs')).href);
+  assert.deepEqual(newModule.inspectBridge(f.paths, f.marker).binding, originalBinding);
+  assert.deepEqual((await f.prepare(newModule)).binding, originalBinding);
+  assert.deepEqual(fs.readFileSync(f.paths.bridgePatch), originalPatch);
+  // Even different code in the new CLI cannot silently rebind an old team.
+  fs.appendFileSync(path.join(newVersion, 'lib/bots/bridge-runtime/index.mjs'), '\n// new runtime\n');
+  assert.deepEqual(newModule.inspectBridge(f.paths, f.marker).binding, originalBinding);
+  const fresh = compositionFixture(t); await fresh.prepare(newModule);
+  assert.equal(fresh.marker.bridge.entry, path.join(newVersion, 'lib/bots/bridge-runtime/index.mjs'));
+  const oldEntry = originalBinding.entry, bytes = fs.readFileSync(oldEntry);
+  fs.appendFileSync(oldEntry, '\n// drift\n');
+  assert.throws(() => newModule.inspectBridge(f.paths, f.marker), /runtime drifted/);
+  fs.writeFileSync(oldEntry, bytes); fs.unlinkSync(oldEntry);
+  assert.throws(() => newModule.inspectBridge(f.paths, f.marker), /ENOENT/);
+  assert.deepEqual(f.marker.bridge, originalBinding);
 });

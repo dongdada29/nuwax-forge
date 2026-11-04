@@ -5,6 +5,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+export function copyBotCli(repo, target) {
+  fs.mkdirSync(target, { recursive: true });
+  for (const name of ['package.json', 'bin', 'lib']) fs.cpSync(path.join(repo, 'packages/cli', name), path.join(target, name), { recursive: true });
+  const dependencies = JSON.parse(fs.readFileSync(path.join(target, 'package.json'))).dependencies;
+  for (const name of Object.keys(dependencies)) fs.cpSync(fs.realpathSync(path.join(repo, 'node_modules', name)), path.join(path.dirname(target), path.basename(name)), { recursive: true });
+  const bridge = path.join(target, 'lib/bots/bridge-runtime'); fs.mkdirSync(bridge, { recursive: true });
+  for (const name of ['package.json', 'index.mjs', 'bridge.mjs', 'projection.mjs', 'locale/en.json', 'locale/zh.json', 'icon.svg']) {
+    const out = path.join(bridge, name); fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.copyFileSync(path.join(repo, 'integrations/ds-bot-forge', name), out);
+  }
+  return path.join(target, 'bin/nuwax-forge.mjs');
+}
+
 // --version/--help are permitted; every other runtime invocation leaves a
 // failing marker. This fixture cannot dispatch a model or inherit credentials.
 export function bridgeFixture(t) {

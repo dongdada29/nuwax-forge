@@ -43,7 +43,9 @@ root 内有三处可供操作者核对的私有记录：
 | `forge-bridge.patch.json` | 固定插件入口和完整规范化配置的组合快照；不需要手工创建或传给 DSH |
 | `dsh/profiles/forge-bots/cordis.patch.yml` | 实际交给 DSH 加载的原 Bot row 与桥 row；整体指纹被绑定 |
 
-check/run 会重读操作者配置，核对配置原文、组合快照、完整 profile patch、桥状态 marker、可信路径和七文件组；再要求 DSH dump 中恰好存在一个启用的固定桥入口及相同根/可信入口配置。JSON 的空白变更也算原文漂移。配置删除、路径替换、符号链接、patch 或插件文件变化均拒绝，不自动更新绑定。修改模板、切换桥版本或增加能力需要操作者使用另一个新 Bot root。
+check/run 会重读操作者配置，核对配置原文、组合快照、完整 profile patch、桥状态 marker、可信路径和七文件组；再要求 DSH dump 中恰好存在一个启用的固定桥入口及相同根/可信入口配置。JSON 的空白变更也算原文漂移。配置删除、路径替换、符号链接、patch 或插件文件变化均拒绝，不自动更新绑定。修改模板、主动切换桥代码或增加能力需要操作者使用另一个新 Bot root；显式迁移尚未实现。
+
+CLI 升级到新的 `versions/<hash>` 目录不会重建既有团队。已有团队继续加载 marker 中已授权的原绝对入口，并逐文件核对原七文件组、包身份、真实目录与无符号链接边界；不把新 CLI 的桥代码自动用于旧团队。原受管版本和原配置中固定的 Forge 安装/入口须继续保留。旧入口缺失或发生内容漂移时拒绝，不静默回退当前版本。新团队使用当前 CLI 内的桥。团队 root、Bot 身份、记忆与配置绑定保持原位置。
 
 `check --json` 的 `bridge` 包含 `enabled`、配置路径/指纹、入口、文件组、patch 指纹、stateRoot、allowPrepare、workspace 别名和固定工具名，便于审阅。它不打印完整操作者模板或凭据。配置文件及可信路径应由操作者控制；与原桥相同，此机制不防御同一 OS 账户恶意并发修改可信文件的竞态。
 
@@ -83,6 +85,6 @@ FORGE_BOT_TEST_TARBALL='/absolute/ds-bot-0.2.7.tgz' \
 node --test packages/cli/test/bots-composition-host.test.mjs
 ```
 
-该测试通过公共 CLI prepare/check/重复 prepare，再两次不传配置地前台启动原生 DSH，核对未认证请求拒绝、原版 DS-Bot client 挂载与 Chief 等待模型。随后从自动生成的同一 row 在安装版 Electron 内加载真实 Cordis 与 `dsh-tools@0.2.1-rc.5`，执行原生 prepare/status、guard 拒绝、取消和卸载。只有 systemPrompt owner、调用 Session 与阻止模型派发的 runtime 是 fixture；任何模型命令都会写失败 marker。测试不复制凭据、不启动 Agent loop、不测试 Chief 自主工具选择或浏览器渲染。
+该测试把 CLI 和原生桥实际复制到两个 `versions/.../node_modules/@nuwax-ai/devkit-cli` 目录：先由旧版本公共 CLI prepare/check，再由新目录公共 CLI check/重复 prepare/run 同一 root，保留原桥入口、配置、marker 和 Chief ID。两次均不传配置地前台启动原生 DSH，核对未认证请求拒绝、原版 DS-Bot client 挂载与 Chief 等待模型。随后从自动生成的同一旧版本 row 在安装版 Electron 内加载真实 Cordis 与 `dsh-tools@0.2.1-rc.5`，执行原生 prepare/status、guard 拒绝、取消和卸载。只有 systemPrompt owner、调用 Session 与阻止模型派发的 runtime 是 fixture；任何模型命令都会写失败 marker。测试不复制凭据、不启动 Agent loop、不测试 Chief 自主工具选择或浏览器渲染。
 
-2026-11-04 本机执行：CLI 全部 155 项中 139 通过、16 个显式宿主验收按预期跳过；既有桥 12 项离线测试通过。另显式运行组合宿主、旧 Bot host 和 launch 三组原生验收，10 项全部通过，模型调用为 0。安装包的 runtime 搬运与从安装包运行的验收由打包接线单独覆盖，源码测试不能替代该层结果。
+2026-11-04 首轮本机执行：CLI 全部 155 项中 139 通过、16 个显式宿主验收按预期跳过；既有桥 12 项离线测试通过。另显式运行组合宿主、旧 Bot host 和 launch 三组原生验收，10 项全部通过，模型调用为 0。升级连续性修正后，组合离线 8 项通过，真实 DSH 两版本目录复制/旧入口加载/Chief ID 保持与原生工具执行再次通过，模型调用仍为 0。安装包的 runtime 搬运与从安装包运行的验收由打包接线单独覆盖，源码测试不能替代该层结果。
