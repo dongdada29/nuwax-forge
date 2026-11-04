@@ -54,13 +54,15 @@ class DashboardTests(unittest.TestCase):
             {'name': 'zcode', 'provider': 'zai', 'invocation': {'command': 'env TOKEN=redacted node /app/zcode.cjs {brief}'}},
             {'name': 'omp', 'invocation': {'command': 'omp {brief}'}},
             {'name': 'dsh', 'invocation': {'command': 'dsh {brief}'}},
+            {'name': 'cursor', 'invocation': {'command': 'env -u XDG_CONFIG_HOME HOME=/x /usr/local/bin/cursor-agent -p {brief} --trust'}},
+            {'name': 'antigravity', 'invocation': {'command': ['env', 'HOME=/x', '/usr/local/bin/agy', '-p', '{brief}']}},
         ]}
-        self.assertEqual([dashboard.configured_engine(e) for e in registry['executors']], ['OpenCode', 'Z Code', 'OMP', 'DeepSeek Harness'])
+        self.assertEqual([dashboard.configured_engine(e) for e in registry['executors']], ['OpenCode', 'Z Code', 'OMP', 'DeepSeek Harness', 'Cursor', 'Antigravity'])
         data = usage.aggregate([], registry, today='2026-10-23')
         record = {'source': 'crew', 'taskKey': 't', 'executor': 'zcode', 'role': 'worker', 'status': 'success',
                   'branch': 'feature/<x>', 'commit': 'da5734d279', 'prUrl': 'https://example.org/o/r/pull/1'}
         page = dashboard.build_html(data, registry, {}, [], [], generated_at='test', records=[record])
-        for value in ('OpenCode', 'Z Code', 'OMP', 'DeepSeek Harness', 'da5734d279', 'feature/&lt;x&gt;', 'https://example.org/o/r/pull/1'):
+        for value in ('OpenCode', 'Z Code', 'OMP', 'DeepSeek Harness', '<b>Cursor</b><small>cursor · 已登记', '<b>Antigravity</b><small>antigravity · 已登记', 'da5734d279', 'feature/&lt;x&gt;', 'https://example.org/o/r/pull/1'):
             self.assertIn(value, page)
         self.assertNotIn('feature/<x>', page)
         self.assertNotIn('TOKEN=redacted', page)

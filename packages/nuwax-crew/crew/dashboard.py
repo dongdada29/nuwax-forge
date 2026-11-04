@@ -153,7 +153,8 @@ def configured_engine(executor):
     if command_name in ('node', 'bun') and len(parts) > 1:
         command_name = os.path.basename(parts[1]).lower()
     return {'omp': 'OMP', 'dsh': 'DeepSeek Harness', 'zcode': 'Z Code', 'zcode.cjs': 'Z Code',
-            'opencode': 'OpenCode', 'claude': 'Claude Code', 'codex': 'Codex'}.get(command_name, '未识别')
+            'opencode': 'OpenCode', 'claude': 'Claude Code', 'codex': 'Codex',
+            'cursor-agent': 'Cursor', 'agy': 'Antigravity'}.get(command_name, '未识别')
 
 
 def delivery_html(record):
@@ -281,11 +282,13 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
                            f"<td>{esc(meta.get('provider') or '未记录')}</td><td>{esc(meta.get('subscription') or '未记录')}</td>"
                            f"<td>{stats.get('total', 0)}</td></tr>")
     engine_table = ''.join(engine_rows) or '<tr><td colspan="5">暂无注册信息</td></tr>'
-    engine_chips = []
-    for engine in ('OMP', 'DeepSeek Harness', 'Z Code', 'OpenCode', 'Codex', 'Claude Code'):
-        items = [m['name'] for m in registry['executors'] if configured_engine(m) == engine]
-        if items:
-            engine_chips.append(f'<span class="engine-chip"><b>{esc(engine)}</b><small>{esc("、".join(items))} · 已登记</small></span>')
+    engine_groups = {}
+    for meta in registry['executors']:
+        engine = configured_engine(meta)
+        if engine != '未识别':
+            engine_groups.setdefault(engine, []).append(meta['name'])
+    engine_chips = [f'<span class="engine-chip"><b>{esc(engine)}</b><small>{esc("、".join(items))} · 已登记</small></span>'
+                    for engine, items in engine_groups.items()]
     engine_chips_html = ''.join(engine_chips) or '<span class="dim">没有可识别的启动命令</span>'
     edges = unified_dashboard.route_edges(records)
     route_rows = ''.join(
