@@ -36,8 +36,8 @@ class ApprovalTests(unittest.TestCase):
             plan.write_text(json.dumps({'taskKey':'t1', 'attemptId':'a1', 'mode':'no-model',
                 'assignments':[{'executor':'fixture','role':'triage','command':[sys.executable, '-c',
                     'from pathlib import Path; Path("started").write_text("yes")']}]}))
-            profile = {'workspace': {'taskWorktreesDirectory': str(base / 'worktrees'), 'artifactsDirectory': str(base / 'artifacts')},
-                'runtimeGuard': {'humanApprovalRequired': True, 'devkitCrewRoot':str(ROOT), 'crewLedger':str(base/'ledger.jsonl'),
+            profile = {'workspace': {'stateDirectory':str(base), 'taskWorktreesDirectory': str(base / 'worktrees'), 'artifactsDirectory': str(base / 'artifacts')},
+                'runtimeGuard': {'stateDirectory':str(state), 'humanApprovalRequired': True, 'devkitCrewRoot':str(ROOT), 'crewLedger':str(base/'ledger.jsonl'),
                                  'tools':{'python':{'path':sys.executable},'node':{'path':'node'}}}}
             request = {'taskKey':'t1','attemptId':'a1','runtime':{'kind':'nuwax-platform'}, 'plan':str(plan),
                        'briefFile':str(brief),'worktree':str(worktree), 'approval':{'summary':'修复问题','scope':'测试仓','acceptance':'测试通过'}}
@@ -45,6 +45,13 @@ class ApprovalTests(unittest.TestCase):
             self.assertFalse(first['executeAllowed'])
             self.assertEqual(first['status'], 'approval-pending')
             self.assertFalse(marker.exists())
+            profile_file, request_file = base/'profile.json', base/'request.json'
+            profile_file.write_text(json.dumps(profile))
+            request_file.write_text(json.dumps(request))
+            pending = subprocess.run([sys.executable, '-B', guard.__file__, 'dispatch', '--profile', str(profile_file),
+                                      '--input', str(request_file)], capture_output=True, text=True)
+            self.assertEqual(pending.returncode, 3)
+            self.assertEqual(json.loads(pending.stdout)['status'], 'approval-pending')
             store = state / 'approvals.sqlite'
             approvals.decide(store, first['approvalId'], 'approved')
             ready = guard.dispatch(profile, request, state)

@@ -365,7 +365,8 @@ def main():
         if len(blob) > 16384:
             raise ValueError('output-limit')
         sys.stdout.buffer.write(blob)
-        return 3 if result.get('status') in {'blocked', 'busy', 'deferred'} else 0
+        status = result.get('status', '')
+        return 3 if status in {'blocked', 'busy', 'deferred'} or status.startswith('approval-') else 0
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(json.dumps({'status': 'blocked', 'reason': type(error).__name__, 'detail': str(error)[:240], 'cursorChanged': False}))
         return 3
