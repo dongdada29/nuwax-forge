@@ -66,11 +66,18 @@ def _detail(task):
                       '<button type="button" data-go-view="approvals">前往审批页</button>') if approvals else ''
     warning = (f'<p class="task-notice">有 {task["runningUnverified"]} 条来源记录仍为进行中，尚未核验进程。'
                '历史无尝试 ID 的记录无法可靠配对。</p>') if task['runningUnverified'] else ''
+    source_status = (f'<p class="dim">任务来源状态：{esc(task["sourceStatus"])} · {esc(task["sourceStatusSource"])} · '
+                     f'{esc(when(task["sourceStatusAt"]))}</p>') if task['sourceStatus'] else ''
+    latest = task['latestAttempt']
+    attempt_status = (f'<p>最近尝试记录：{esc(latest.get("status") or "unknown")} · {esc(latest.get("source"))} · '
+                      f'{esc(when(latest.get("at")))}'
+                      f'{"；含时间未知记录，顺序待核实" if not task["attemptOrderKnown"] else ""}</p>') if latest else ''
+    status_note = '<p class="task-notice">' + esc(task['statusNote']) + '</p>' if task['statusNote'] else ''
     return (f'<details id="task-{task["id"]}" class="task-detail" data-task-detail="{task["id"]}">'
             f'<summary>{esc(task["title"])} · 查看详情</summary><div class="task-detail-body">'
             f'<p class="eyebrow">{esc(task["source"])} · {esc(task["taskKey"])}</p>'
             f'<h3>{esc(task["title"])}</h3><p class="task-state state-{task["state"]}">{STATES[task["state"]]} · {esc(task["status"])}</p>'
-            f'{warning}<h4>目标与验收条件</h4><p>{esc(task["objective"] or "目标未记录")}</p><ul class="task-facts">{acceptance}</ul>'
+            f'{source_status}{attempt_status}{status_note}{warning}<h4>目标与验收条件</h4><p>{esc(task["objective"] or "目标未记录")}</p><ul class="task-facts">{acceptance}</ul>'
             f'<p class="dim">工作区：{esc(task["workspace"] or "未记录")}</p>{approval_block}'
             f'<h4>执行与交付</h4><p class="dim">{task["attemptCount"]} 次可识别尝试 · {task["legacyCount"]} 条无尝试 ID 的观察。执行结束不等于产品验收通过；交付引用尚未独立验证。</p>'
             f'<ul class="attempt-list">{"".join(attempts) or "<li class=dim>尚未派工</li>"}</ul>'
@@ -97,12 +104,17 @@ def render_workbench(tasks, *, source_states=()):
         search = ' '.join([task['taskKey'], task['title'], task['objective'], task['workspace'],
                            *task['executors'], *[str(r.get('attemptId') or '') for r in task['attempts']]])
         legacy = f'<small>{task["legacyCount"]} 条无 ID 观察</small>' if task['legacyCount'] else ''
+        status_detail = f'<small>任务来源状态：{esc(task["sourceStatus"])}</small>' if task['sourceStatus'] else ''
+        if task['latestAttempt']:
+            status_detail += f'<small>最近尝试记录：{esc(task["latestAttempt"].get("status") or "unknown")}</small>'
+        if task['statusNote']:
+            status_detail += '<small class="status-difference">有尝试记录需核对</small>'
         rows.append(f'<tr data-task-row="{task["id"]}" data-search="{esc(search.lower())}" data-state="{task["state"]}" '
                     f'data-sources="{esc(json.dumps(task["sources"]))}" data-executors="{esc(json.dumps(task["executors"]))}" '
                     f'data-at="{timestamp(task["lastAt"]) or ""}"><td><a class="task-link" href="#task-{task["id"]}" '
                     f'data-task-open="{task["id"]}">{esc(task["title"])}</a><small>{esc(task["taskKey"])}</small></td>'
                     f'<td><span class="task-state state-{task["state"]}">{STATES[task["state"]]}</span>'
-                    f'<small>{esc(task["status"])}</small></td><td>{esc(task["source"])}<small>{esc("、".join(task["executors"]) or "尚未派工")}</small></td>'
+                    f'{status_detail}</td><td>{esc(task["source"])}<small>{esc("、".join(task["executors"]) or "尚未派工")}</small></td>'
                     f'<td>{task["attemptCount"]} 次尝试{legacy}</td>'
                     f'<td>{esc(when(task["lastAt"]))}</td></tr>')
     empty = '<p class="task-empty">当前没有可展示任务。可接入任务矩阵、Stack 任务库或派工台账；来源未接入与空任务库见下方。</p>' if not tasks else ''

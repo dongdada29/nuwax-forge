@@ -32,6 +32,11 @@ def text(value, limit=2048):
     return value[:limit] if isinstance(value, str) else ''
 
 
+def identifier(value):
+    """Validate presence without trimming or truncating identity fields."""
+    return value if isinstance(value, str) and value.strip() else ''
+
+
 def timestamp(value):
     """Unknown and timezone-less dates must not silently become local time."""
     if not isinstance(value, str):
@@ -49,11 +54,32 @@ def identity(source, key):
 
 def reference(record):
     ref = record.get('taskRef')
-    if isinstance(ref, dict) and all(isinstance(ref.get(k), str) and ref[k].strip() for k in ('source', 'taskKey')):
+    if isinstance(ref, dict) and all(identifier(ref.get(k)) for k in ('source', 'taskKey')):
         return ref['source'], ref['taskKey']
-    source, key = record.get('source'), record.get('taskKey')
-    return (source if isinstance(source, str) and source.strip() else 'unknown',
-            key if isinstance(key, str) and key.strip() else '')
+    return identifier(record.get('source')) or 'unknown', identifier(record.get('taskKey'))
+
+
+def _source_status(task, item, origin):
+    status = text(item.get('status'))
+    dates = [event['at'] for event in item.get('events') or []
+             if event.get('status') == status and timestamp(event.get('at')) is not None]
+    at = item.get('updatedAt')
+    task.update(status=status, sourceStatus=status, sourceStatusSource=origin,
+                sourceStatusAt=at if timestamp(at) is not None else max(dates, key=timestamp) if dates else None)
+
+
+def _status_note(task):
+    if task['sourceStatus'] not in DONE:
+        return ''
+    source_at = timestamp(task['sourceStatusAt'])
+    attention = [record for record in task['attempts'] if record.get('status') in BLOCKED | RUNNING]
+    if source_at is not None and any(timestamp(record.get('at')) is not None and timestamp(record['at']) > source_at for record in attention):
+        return '任务来源标记已验证，但存在时间戳晚于来源状态的失败、阻塞或进行中尝试记录，需核对；来源状态保持不变。'
+    if source_at is not None and any(timestamp(record.get('at')) == source_at for record in attention):
+        return '任务来源标记已验证，但异常尝试与来源状态的时间戳相同，先后顺序需核对；来源状态保持不变。'
+    if attention and (source_at is None or any(timestamp(record.get('at')) is None for record in attention)):
+        return '任务来源标记已验证，观察中包含失败、阻塞或进行中记录，且时间不完整，需核对；来源状态保持不变。'
+    return ''
 
 
 def state_for(status):
@@ -80,6 +106,7 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
             'title': key, 'objective': '', 'acceptance': [], 'workspace': '',
             'status': '', 'state': 'other', 'attempts': [], 'events': [],
             'approvals': [], 'sources': [], 'executors': [], 'lastAt': None,
+            'sourceStatus': '', 'sourceStatusSource': '', 'sourceStatusAt': None,
         })
 
     for item in tasks:
@@ -87,7 +114,8 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
         task = get(source, key)
         if task is None: continue
         task.update(title=text(item.get('title')) or key, objective=text(item.get('objective'), 4096),
-                    workspace=text(item.get('workspace')), status=text(item.get('status')))
+                    workspace=text(item.get('workspace')))
+        _source_status(task, item, identifier(item.get('source')) or source)
         task['acceptance'] = [text(p, 1000) for p in item.get('acceptance', []) if isinstance(p, str)]
         task['events'].extend(item.get('events') or [])
 
@@ -96,7 +124,7 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
         task = get(source, key)
         if task is None: continue
         task['title'] = text(item.get('title')).replace('**', '') or key
-        task['status'] = text(item.get('status'))
+        _source_status(task, item, identifier(item.get('source')) or 'matrix')
         task['objective'] = text(item.get('objective'), 4096)
         evidence = text(item.get('evidence'), 4096)
         if evidence:
@@ -117,7 +145,7 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
 
     for item in approvals or ():
         # These approvals are produced by Crew and explicitly carry its taskKey.
-        task = get('crew', text(item.get('taskKey')))
+        task = get('crew', identifier(item.get('taskKey')))
         if task is None: continue
         task['approvals'].append(item)
         if task['title'] == task['taskKey']:
@@ -133,13 +161,16 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
 
     for task in groups.values():
         attempts = task['attempts']
-        task['executors'] = sorted({text(r.get('executor')) for r in attempts if r.get('executor')})
-        task['sources'] = sorted({text(r.get('source')) for r in attempts if r.get('source')} | {task['source']})
+        task['executors'] = sorted({identifier(r.get('executor')) for r in attempts if identifier(r.get('executor'))})
+        task['sources'] = sorted({identifier(r.get('source')) for r in attempts if identifier(r.get('source'))} | {task['source']})
         dated = [e for e in task['events'] if timestamp(e.get('at')) is not None]
         if dated:
             task['lastAt'] = max(dated, key=lambda e: timestamp(e['at']))['at']
         # Array/source order is a fallback only within one source, never a global clock.
         latest = max(enumerate(attempts), key=lambda pair: (timestamp(pair[1].get('at')) or 0, pair[0]))[1] if attempts else {}
+        task['latestAttempt'] = {key: latest.get(key) for key in ('source', 'attemptId', 'executor', 'status', 'at')} if latest else None
+        task['attemptOrderKnown'] = bool(attempts) and all(timestamp(record.get('at')) is not None for record in attempts)
+        task['statusNote'] = _status_note(task)
         if not task['status'] or (task['status'] in PENDING and latest):
             task['status'] = text(latest.get('status')) or 'unknown'
         task['state'] = state_for(task['status'])

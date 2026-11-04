@@ -61,6 +61,67 @@ class TaskProjectionTests(unittest.TestCase):
         self.assertEqual(len(tasks), 4)
         self.assertEqual(len({t['id'] for t in tasks}), 4)
 
+    def test_approval_keeps_full_task_identity_with_a_matching_short_prefix(self):
+        prefix = 'x' * 2048
+        longer = prefix + 'suffix'
+        records = [{'source': 'crew', 'taskKey': key, 'status': 'completed'} for key in (prefix, longer)]
+        approval = {'taskKey': longer, 'attemptId': 'next', 'status': 'pending'}
+        tasks = {t['taskKey']: t for t in build_workbench(records, approvals=[approval])}
+        self.assertEqual(len(tasks), 2)
+        self.assertEqual(tasks[prefix]['approvals'], [])
+        self.assertEqual(tasks[prefix]['state'], 'review')
+        self.assertEqual(tasks[longer]['approvals'], [approval])
+        self.assertEqual(tasks[longer]['state'], 'approval')
+
+    def test_filter_identity_values_keep_full_source_and_executor(self):
+        source = 'source-' + 's' * 2048
+        executor = 'executor-' + 'e' * 2048
+        task = build_workbench([{'source': source, 'taskKey': 't', 'executor': executor, 'status': 'completed'}])[0]
+        self.assertEqual(task['sources'], [source])
+        self.assertEqual(task['executors'], [executor])
+
+    def test_verified_source_and_later_failed_attempt_are_both_visible_without_rewriting_source(self):
+        metadata = {'source': 'stack', 'taskKey': 't', 'status': 'done',
+                    'events': [{'source': 'stack', 'status': 'done', 'at': '2026-11-04T01:00:00Z'}]}
+        record = {'source': 'stack', 'taskKey': 't', 'attemptId': 'a', 'status': 'failed', 'at': '2026-11-04T02:00:00Z'}
+        task = build_workbench([record], tasks=[metadata])[0]
+        self.assertEqual(task['status'], 'done')
+        self.assertEqual(task['state'], 'done')
+        self.assertEqual(task['sourceStatus'], 'done')
+        self.assertEqual(task['sourceStatusAt'], '2026-11-04T01:00:00Z')
+        self.assertEqual(task['latestAttempt']['status'], 'failed')
+        self.assertEqual(task['lastAt'], '2026-11-04T02:00:00Z')
+        self.assertTrue(task['statusNote'])
+        page = render_workbench([task])
+        self.assertIn('任务来源状态：done', page)
+        self.assertIn('最近尝试记录：failed', page)
+        self.assertIn('需核对', page)
+
+    def test_unknown_attempt_time_does_not_override_source_or_claim_a_later_failure(self):
+        metadata = {'source': 'stack', 'taskKey': 't', 'status': 'done'}
+        task = build_workbench([{'source': 'stack', 'taskKey': 't', 'status': 'failed'}], tasks=[metadata])[0]
+        self.assertEqual(task['state'], 'done')
+        self.assertEqual(task['sourceStatus'], 'done')
+        self.assertIsNone(task['sourceStatusAt'])
+        self.assertEqual(task['latestAttempt']['status'], 'failed')
+        self.assertIn('时间不完整', task['statusNote'])
+        self.assertNotIn('之后', task['statusNote'])
+
+    def test_historical_failure_before_verified_source_is_not_reported_as_a_new_conflict(self):
+        metadata = {'source': 'stack', 'taskKey': 't', 'status': 'done', 'updatedAt': '2026-11-04T02:00:00Z'}
+        task = build_workbench([{'source': 'stack', 'taskKey': 't', 'status': 'failed', 'at': '2026-11-04T01:00:00Z'}], tasks=[metadata])[0]
+        self.assertEqual(task['state'], 'done')
+        self.assertEqual(task['latestAttempt']['status'], 'failed')
+        self.assertEqual(task['statusNote'], '')
+
+    def test_equal_snapshot_and_attempt_times_keep_source_status_and_require_order_review(self):
+        at = '2026-11-04T02:00:00Z'
+        task = build_workbench([{'source': 'stack', 'taskKey': 't', 'status': 'failed', 'at': at}],
+                               tasks=[{'source': 'stack', 'taskKey': 't', 'status': 'done', 'updatedAt': at}])[0]
+        self.assertEqual(task['state'], 'done')
+        self.assertIn('时间戳相同', task['statusNote'])
+        self.assertNotIn('晚于', task['statusNote'])
+
     def test_crew_event_history_preserves_reason_delivery_and_unknown_usage(self):
         base = {'taskKey': 'task', 'attemptId': 'a', 'executor': 'dsh', 'role': 'worker'}
         records = sources.crew_records([

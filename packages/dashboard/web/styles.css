@@ -122,6 +122,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .task-table-wrap th:first-child{width:38%}.task-table-wrap th:nth-child(2){width:17%}.task-table-wrap th:nth-child(3){width:20%}
 .task-table-wrap td{padding:15px 12px;overflow-wrap:anywhere}
 .task-table-wrap td small{display:block;color:var(--dim);font-size:11px;margin-top:5px}
+.task-table-wrap td small.status-difference{color:var(--amber)}
 .task-link{color:var(--ink);text-decoration:none;font-weight:600;font-size:14px;display:inline-block}
 .task-link:hover{color:var(--blue);text-decoration:underline}
 .task-state{font-size:12px;display:inline-block;color:var(--dim)}
