@@ -1,0 +1,17 @@
+{
+  "name": "@nuwax-ai/dsh-forge-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Explicitly connect the existing Forge dashboard inside a DSH Web panel",
+  "main": "index.mjs",
+  "exports": { ".": "./index.mjs", "./client": "./client.js", "./package.json": "./package.json" },
+  "files": ["index.mjs", "client.js"],
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar"]
+    }
+  },
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}
