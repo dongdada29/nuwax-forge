@@ -18,7 +18,7 @@ STATES = {
     'review': '待验收', 'blocked': '阻塞 / 失败', 'done': '来源标记已验证',
     'other': '其他',
 }
-RUNNING = {'dispatched', 'running', 'in_progress', 'claimed'}
+RUNNING = {'dispatched', 'running', 'in_progress', 'claimed', 'analyzing', 'implementing', 'verifying'}
 REVIEW = {'completed', 'success', 'succeeded', 'reported', 'in_review',
           'merged-needs-acceptance', 'released-await-verify',
           'test-verified-web-sample-pending', 'mac-verified-win-pending',

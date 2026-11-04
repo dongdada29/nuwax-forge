@@ -153,6 +153,7 @@ class TaskProjectionTests(unittest.TestCase):
             with sqlite3.connect(path) as db:
                 db.execute('CREATE TABLE tasks (id TEXT PRIMARY KEY,payload TEXT)')
                 db.execute('INSERT INTO tasks VALUES(?,?)', ('new', json.dumps({'objective': '尚未派工', 'phase': 'queued', 'predicates': ['验证']})))
+            db.close()
             before = path.read_bytes()
             tasks = build_workbench([], tasks=sources.task_store_tasks(path))
             self.assertEqual(tasks[0]['title'], '尚未派工')
@@ -160,6 +161,31 @@ class TaskProjectionTests(unittest.TestCase):
             self.assertEqual(tasks[0]['attemptCount'], 0)
             self.assertIsNone(sources.task_store_records(path))
             self.assertEqual(path.read_bytes(), before)
+
+    def test_native_stack_active_phases_remain_in_running_filter_with_or_without_assignments(self):
+        phases = ('analyzing', 'implementing', 'verifying')
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'tasks.sqlite'
+            with sqlite3.connect(path) as db:
+                db.execute('CREATE TABLE tasks (id TEXT PRIMARY KEY,payload TEXT)')
+                for phase in (*phases, 'waiting', 'blocked', 'done'):
+                    db.execute('INSERT INTO tasks VALUES(?,?)', (phase, json.dumps({'objective': phase, 'phase': phase})))
+            db.close()
+            metadata = sources.task_store_tasks(path)
+        for with_assignments in (False, True):
+            with self.subTest(with_assignments=with_assignments):
+                records = [{'source': 'stack', 'taskKey': phase, 'attemptId': phase + '-a', 'status': 'reported'} for phase in phases] if with_assignments else []
+                tasks = build_workbench(records, tasks=metadata)
+                by_key = {task['taskKey']: task for task in tasks}
+                for phase in phases:
+                    self.assertEqual(by_key[phase]['state'], 'running', phase)
+                    self.assertEqual(by_key[phase]['sourceStatus'], phase)
+                    self.assertEqual(by_key[phase]['status'], phase)
+                self.assertEqual(sum(task['state'] == 'running' for task in tasks), 3)
+                self.assertEqual(render_workbench(tasks).count('data-state="running"'), 3)
+                self.assertEqual(by_key['waiting']['state'], 'other')
+                self.assertEqual(by_key['blocked']['state'], 'blocked')
+                self.assertEqual(by_key['done']['state'], 'done')
 
     def test_static_html_details_escape_untrusted_text_and_unsafe_links(self):
         tasks = build_workbench([{'source': 'crew', 'taskKey': '<script>', 'attemptId': 'a',

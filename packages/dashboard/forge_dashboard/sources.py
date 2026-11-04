@@ -1,6 +1,7 @@
 """Explicit local sources for the Forge dashboard. No network or state mutation."""
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -52,19 +53,25 @@ def crew_records(rows):
                         'legacyUncorrelated': not bool(attempt),
                         'events': [*old.get('events', []), _event(row, details)],
                         **delivery_fields(old, row, details)}
-    # Attempt lifecycle events enrich an already identified step, not usage counts.
+    # Resolve each lifecycle event directly to the first execution step for its
+    # exact task + attempt. Preserve the original single-attachment semantics
+    # without scanning every execution again for each lifecycle row.
+    by_attempt = {}
+    for record in grouped.values():
+        if record.get('attemptId'):
+            by_attempt.setdefault((record.get('taskKey'), record['attemptId']), record)
     for row in rows:
         if row.get('status') in {'attempt-started', 'attempt-blocked', 'attempt-failed', 'attempt-completed'} and _text(row.get('attemptId')):
-            matching = [r for r in grouped.values() if r.get('taskKey') == row.get('taskKey') and r.get('attemptId') == row['attemptId']]
-            if matching:
+            record = by_attempt.get((row.get('taskKey'), row['attemptId']))
+            if record is not None:
                 details = row.get('details') if isinstance(row.get('details'), dict) else {}
-                matching[0]['events'].append(_event(row, details))
+                record['events'].append(_event(row, details))
     return list(grouped.values())
 
 
 def task_store_records(path):
     p = Path(path).resolve(strict=True)
-    with sqlite3.connect(p.as_uri() + '?mode=ro', uri=True) as db:
+    with closing(sqlite3.connect(p.as_uri() + '?mode=ro', uri=True)) as db:
         if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='assignments'").fetchone():
             return None
         rows = db.execute('SELECT attempt_id,task_id,state,payload FROM assignments').fetchall()
@@ -91,7 +98,7 @@ def task_store_records(path):
 def task_store_tasks(path):
     """Read task metadata independently of whether an Assignment exists yet."""
     p = Path(path).resolve(strict=True)
-    with sqlite3.connect(p.as_uri() + '?mode=ro', uri=True) as db:
+    with closing(sqlite3.connect(p.as_uri() + '?mode=ro', uri=True)) as db:
         columns = {r[1] for r in db.execute('PRAGMA table_info(tasks)')}
         if not {'id', 'payload'}.issubset(columns):
             return []
