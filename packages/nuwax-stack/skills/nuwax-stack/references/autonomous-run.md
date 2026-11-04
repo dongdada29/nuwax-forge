@@ -18,6 +18,12 @@
 
 使用 [scripts/task_state.py](../scripts/task_state.py) 管理可恢复的本地状态。脚本记录状态与验证证据，不会替 Agent 执行任意命令或提供后台唤醒。
 
+### 本地 Ticket 与 Assignment 账本（受限第一阶段）
+
+通过一次性 `nuwax-forge stack task-state --command <操作> --input <JSON 文件>` 记录 Trigger、显式准入的 Ticket 和 Assignment 尝试。输入 JSON 必须有仓外 `stateDirectory` 与 `repoRoot`；文件上限 64 KiB。操作为 `trigger-record`、`trigger-read`、`ticket-admit`、`ticket-read`、`assignment-prepare`、`assignment-start`、`assignment-report`、`assignment-finish`。Trigger 只存小型元数据与资源指针；`context-only` 永远不能创建 Ticket。`ticket-admit` 需要显式 admission 及 Mandate。Assignment 状态更新要求最新 revision 和有效 lease，并追加事件。
+
+Admission 与 Mandate 目前只是本机声明记录，不能替代 Nuwax 身份校验，也不会在执行时强制权限。CLI 不启动 daemon、不调用模型、不执行 argv、不访问平台或发送通知；usage 缺失以 `null` 保存，表示未知而非 0。
+
 ## 唤醒与停止
 
 等待模型、CI、构建或外部事件时优先使用平台已提供的完成事件；需要心跳时使用用户授权范围内的平台调度。必须记录实际返回的任务/订阅 ID 和下一次唤醒时间。没有真实唤醒机制时标为等待接入，不能宣称“后台持续运行”。不要仅靠提示词建立无限自调用，也不要另造轮询 daemon。

@@ -59,3 +59,18 @@ GUI 是显式可选入口，需已有 SDK、认证与授权 CDP；只支持本�
 ## 离线统一安装与薄 Skill
 
 在源码仓运行 `node scripts/build-bundle.mjs --out <新的仓外绝对目录>`，将整个目录分发后使用 `node <bundle>/install.mjs install --host codex|deepseek-harness|nuwax`。可显式指定 `--root`、Codex/DSH 的 `--host-root` 或 Nuwax 的 `--workspace`。完整路径、发现机制、升级/rollback/uninstall 与保留备份规则见分发包 `docs/INSTALLATION.md`（源码为 `docs/INSTALLATION.md`）。安装只做本地 doctor，不运行模型，不发布平台技能。
+
+## 运行看板
+
+`nuwax-forge dashboard` 复用 Crew 本地 HTML 看板，显式传入数据源：
+
+```sh
+nuwax-forge dashboard --ledger /path/crew-usage.jsonl --registry /path/executors.json \
+  --task-store /path/tasks.sqlite --agent-state-root /path/agent-runs --out /path/dashboard.html
+```
+
+`--task-store`、`--agent-state-root`、`--agent-state`、`--host-budget`、`--health`、`--matrix` 均可省略；agent-state-root 只读取一层直接子目录，agent-state 指向单次运行目录；host-budget 接受 `nuwax-forge budget guard --json` 的输出，按 router 与 worker 展示该快照。仅读本地文件，不调用模型或平台；输出不得覆盖输入。旧任务库没有 Assignment 表时显示未接入，不迁移数据库。
+
+按来源、执行器、角色和声明模型展示任务与用量。Crew 同一尝试的派工及结果事件按 attempt/step 关联；没有 attemptId 的历史记录无法可靠去重。不同来源可能记录同一次执行，分别显示，不作跨来源总和。未知 token 和模型调用数显示 unknown，已知的 0 保留为 0；模型名是运行声明，不代表供应商账单或完整宿主消耗。host-budget 的任务列是宿主会话 ID，快照不含之后的消耗；看板不会自动发现其他主机会话，静态页面不会自动发布或刷新。
+
+需要持续观察时，将 `--out` 换成 `--serve --port 0 --refresh-seconds 5`。该命令前台监听 `127.0.0.1`，输出 URL；页面按间隔读取已指定来源，也可手动刷新，并显示台账最后写入时间。快照输入（例如 host-budget）只有文件本身更新才变化。路由关系只展示来源中有证据的关联，Router 身份缺失时显示未记录。结束前台进程即可关闭。

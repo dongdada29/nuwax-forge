@@ -7,6 +7,7 @@ import json
 import os
 import signal
 import re
+import stat
 import subprocess
 import time
 import uuid
@@ -16,12 +17,31 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import ledger
+from . import ledger, unified_dashboard
 from .execution_budget import ExecutionBudget, command_metadata, model_assignment
 
 
 class RunError(ValueError):
     pass
+
+
+def _read_delivery(step_root: Path) -> dict:
+    """Optional structured worker report, treated as an unverified claim."""
+    try:
+        fd = os.open(step_root / 'delivery.json', os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_size > 16384:
+                return {}
+            raw = os.read(fd, 16385)
+        finally:
+            os.close(fd)
+        if len(raw) > 16384:
+            return {}
+        data = json.loads(raw.decode('utf-8'))
+        return unified_dashboard.delivery_fields(data)
+    except (OSError, ValueError, UnicodeError):
+        return {}
 
 
 def _resolve(command, worktree: str, brief: str, artifacts: str = "", *, step_artifacts: str = "", brief_file: str = "", context_manifest: str = ""):
@@ -96,6 +116,13 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
         command = a.get("command")
         executor = a.get("executor", "?")
         role = a.get("role", "unknown")
+        assignment_runtime = a.get('runtime') if isinstance(a.get('runtime'), dict) else {}
+        plan_runtime = plan.get('runtime') if isinstance(plan.get('runtime'), dict) else {}
+        model = a.get('model') or assignment_runtime.get('model') or plan.get('model') or plan_runtime.get('model')
+        if isinstance(model, dict):
+            model = model.get('name')
+        if not isinstance(model, str) or not model.strip():
+            model = None
         managed = model_assignment(plan, a)
         if not command:
             results.append({"executor": executor, "role": role, "status": "skipped",
@@ -115,7 +142,7 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
             if not decision.get("allowed"):
                 ledger.record(ledger_path, task_key=plan["taskKey"], executor=executor, role=role, status="blocked",
                               attempt_id=attempt_id, phase="budget-guard",
-                              details={"reason": decision.get("reason"), "guardFile": str(step_root / "budget-guard.json"), "command": metadata})
+                              details={"reason": decision.get("reason"), "guardFile": str(step_root / "budget-guard.json"), "command": metadata, "model": model, "stepIndex": index + 1})
                 results.append({"executor": executor, "role": role, "status": "blocked", "managed": True,
                                 "processPassed": False, "reason": decision.get("reason"), "budget": decision,
                                 "command": metadata})
@@ -131,7 +158,7 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
             (step_root / "command.json").write_text(json.dumps(cmd, ensure_ascii=False) + "\n", encoding="utf-8")
             (step_root / "command.json").chmod(0o600)
         ledger.record(ledger_path, task_key=plan["taskKey"], executor=executor, role=role, status="dispatched",
-                      attempt_id=attempt_id, phase="execution", details={"managed": managed, "command": metadata})
+                      attempt_id=attempt_id, phase="execution", details={"managed": managed, "command": metadata, "model": model, "stepIndex": index + 1})
         log = root / f"{index + 1}-{_safe(executor)}-{_safe(role)}.log"
         started = time.monotonic()
         failure = None
@@ -184,6 +211,7 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
             summary = str(error)
             log.write_text(summary, encoding="utf-8")
         elapsed = round(time.monotonic() - started, 3)
+        delivery = _read_delivery(step_root)
         settlement = budget.settle(a, decision=decision, step_root=step_root) if managed else None
         if settlement is not None:
             (step_root / "budget-reconcile.json").write_text(json.dumps(settlement, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -193,12 +221,12 @@ def run_plan(plan: dict, *, worktree: str, brief: str, ledger_path, artifacts_di
         summary = summary[-400:]
         ledger.record(ledger_path, task_key=plan["taskKey"], executor=executor, role=role, status=status,
                       attempt_id=attempt_id, phase="execution", elapsed_seconds=elapsed,
-                      details={"managed": managed, "chargedTokens": settlement.get("chargedTokens") if settlement else None,
-                               "remainingTokens": budget.remaining if managed else None})
+                      details={"managed": managed, "model": model, "stepIndex": index + 1, "chargedTokens": settlement.get("chargedTokens") if settlement else None,
+                               "remainingTokens": budget.remaining if managed else None, "delivery": delivery})
         results.append({"executor": executor, "role": role, "status": status,
                         "managed": managed, "command": metadata, "budget": decision, "settlement": settlement,
                         "log": str(log), "elapsedSeconds": elapsed,
-                        "exitCode": exit_code, "failure": failure, "processPassed": ok, "summary": summary})
+                        "exitCode": exit_code, "failure": failure, "processPassed": ok, "summary": summary, "delivery": delivery})
         if not ok:
             break
     ran = [r for r in results if r["status"] != "skipped"]
