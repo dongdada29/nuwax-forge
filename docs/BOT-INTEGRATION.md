@@ -1,6 +1,6 @@
 # DS-Bot 接入切片
 
-Forge 通过真实 DeepSeek Harness (DSH) 的插件管理器组合原版 DS-Bot，提供一个独立、可检查、可显式启动的 Bot 团队。入口暂时为 `packages/cli/lib/bots/entry.mjs`，尚未接入公共 CLI、Dashboard 或 personal-agent。没有复制 Bot 引擎、Cordis runtime、任务系统、SSH 层或 Electron 外壳。
+Forge 通过真实 DeepSeek Harness (DSH) 的插件管理器组合原版 DS-Bot，提供一个独立、可检查、可显式启动的 Bot 团队。公共入口为 `nuwax-forge bots plan|prepare|check|run`，独立入口 `packages/cli/lib/bots/entry.mjs` 保留；尚未接入 Dashboard 或 personal-agent。没有复制 Bot 引擎、Cordis runtime、任务系统、SSH 层或 Electron 外壳。首次使用见 [BOT-QUICKSTART.md](BOT-QUICKSTART.md)。
 
 Bot 是持久身份：Chief 管理团队，每个 Bot 的模型、Session、记忆和群成员关系由原 DS-Bot 保存。Forge Worker 仍是一次有界执行；本切片没有让 Bot 自动派 Worker，也没有新增审批通道。后续接线须复用 personal-agent 的用户任务和审批，才能把 Bot 请求转成 Forge 执行，不能把持续对话等同于一次任务。
 
@@ -41,7 +41,9 @@ node packages/cli/lib/bots/entry.mjs check --root "$FORGE_BOT_ROOT" --dsh "$FORG
 node packages/cli/lib/bots/entry.mjs run --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY"
 ```
 
-`run` 在前台运行真实 DSH web app，固定绑定 `127.0.0.1`，默认端口 `0` 由系统分配，也可显式传 `--port 3081`。宿主输出自己的本地访问链接；打开该链接进入原 DS-Bot 界面。Ctrl-C 停止宿主，团队数据保留，可用同一命令重启。此入口不自动打开浏览器，不发送消息，不创建 provider；新团队的 Chief 等待选择模型。用户在原界面配置自己的模型后，原插件的问候和后续操作可能调用模型，需单独完成体验验收。
+`run` 在前台运行真实 DSH web app，固定绑定 `127.0.0.1`，默认端口 `0` 由系统分配，也可显式传 `--port 3081`。宿主输出自己的本地访问链接；打开该链接进入原 DS-Bot 界面。仅显式加 `--open` 才调用系统默认浏览器，失败时保留前台宿主并提示手动打开。Ctrl-C 停止宿主，团队数据保留，可用同一命令重启。入口不发送消息、不创建 provider；新团队的 Chief 等待选择模型。原 UI 建群会尝试自动问候，无 Key 时被缺凭据阻断；配置模型后问候和后续操作可能调用模型。
+
+以上独立命令亦可写为 `node packages/cli/bin/nuwax-forge.mjs bots <子命令> ...`，已安装 CLI 时为 `nuwax-forge bots <子命令> ...`；两种入口复用相同严格参数校验。
 
 已有原始 npm 归档时，可给 `prepare` 加 `--tarball /absolute/path/ds-bot-0.2.7.tgz`。该文件仍必须通过同一固定 SRI；此选项只避免 DS-Bot 归档下载，DSH 插件管理器解析/安装依赖仍可能需要网络。`prepare` 不会运行模型。
 
@@ -84,10 +86,10 @@ node --test packages/cli/test/bots-*.test.mjs
 | 层次 | 已观察证据 | 仍未证明 |
 | --- | --- | --- |
 | 安装/组合 | 固定归档 SRI、7 个原文件 hash、web+bot bundle、启用的原入口、独立数据路径 | 其它 DSH/DS-Bot 版本兼容性 |
-| 真实宿主/客户端 | 原 DSH 启动；HTML 模块目录发现 `ds-bot`；原编译客户端 HTTP 200；无 cookie 的 Bot 请求 HTTP 401 | 浏览器渲染、交互布局和模型配置卡的视觉体验 |
+| 真实宿主/客户端 | 原 DSH 启动；HTML 模块目录发现 `ds-bot`；原编译客户端 HTTP 200；无 cookie 的 Bot 请求 HTTP 401；另经 nuwa-browser 实看 Chief 模型等待卡/模型设置、原 UI 新建 Bot/群、访问群详情控件与 `@` 候选 | 真实模型交互、完整群详情面板布局、移动布局、系统默认浏览器打开 |
 | Chief/持久身份 | 原 `/api/bot` 返回 Chief、`waiting=true`、无模型；两个 Bot 各有不同 Session；重启后 IDs 保留 | 不同模型路由的实际回答 |
 | 群数据 | 原 API 创建 3 成员群，Chief 为 admin、`mode=admin`；重启后群保留；不存在成员被拒绝 | admin-first 发言顺序、`@` 点名及并行派发 |
 | 记忆读取边界 | 两 Bot 面板分别返回 own/team，群仅返回 group；不存在 Bot 被拒绝 | 写入/回读隔离、自动审查、跨 Bot 私有权限及重启后的非空记忆 |
 | 失败对照 | 错误宿主版本、破损归档、禁用原入口、目录重定向、无认证及无效对象均拒绝 | 模型或工具运行时故障恢复 |
 
-真实测试确认没有可用模型、所有 Bot 问候保持等待，未发送任何消息。原用户 API 的 `memory-ask` 会调用模型，测试没有调用它，也没有直接改记忆文件来代替产品路径。`modelCallsRequested=0` 表示测试没有请求模型调用，并非模型费用审计结果。完整验收仍需用户授权模型后，实际建模配置、消息、记忆写读、群管理与 `@` 调度。
+上述 API 测试确认没有可用模型、所有 Bot 问候保持等待，未发送任何消息。原用户 API 的 `memory-ask` 会调用模型，测试没有调用它，也没有直接改记忆文件来代替产品路径。`modelCallsRequested=0` 仅表示这组 API 测试没有请求模型调用，并非模型费用审计结果。另一次原生浏览器验收的新建群聊自动问候尝试被 `MISSING_CREDENTIAL` 阻断，不能套用该零请求结论；详见快速指引的验收记录。完整验收仍需用户授权模型后，实际建模配置、消息、记忆写读、群管理与 `@` 调度。

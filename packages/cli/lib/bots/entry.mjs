@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
-import { botPlan, checkBot, prepareBot, startBot } from './profile.mjs';
+import { botPlan, checkBot, prepareBot } from './profile.mjs';
+import { runBotForeground } from './launch.mjs';
 
 const HELP = `DS-Bot integration (original plugin on real DSH; no model call during prepare/check)
 Usage: node packages/cli/lib/bots/entry.mjs <plan|prepare|check|run> --root <new-absolute-directory> --dsh <absolute-dsh-path> [--json]
@@ -9,7 +10,10 @@ Usage: node packages/cli/lib/bots/entry.mjs <plan|prepare|check|run> --root <new
            Optional --tarball <absolute-original-npm-tgz> avoids artifact download
   check    Check DSH version, artifact, original exports/files and composed entries
   run      Explicit foreground web host on 127.0.0.1; --port <0..65535>, default 0
+           Optional --open opens the native local link in your default browser
+           Ctrl-C stops the host; reuse the same root to keep the team
 Requires DSH 0.2.1-rc.5. No existing profile or credentials are imported.
+First-use walkthrough: docs/BOT-QUICKSTART.md
 `;
 
 export function parseBotArgs(argv) {
@@ -19,13 +23,15 @@ export function parseBotArgs(argv) {
   const options = {}; const seen = new Set();
   for (let i = 0; i < rest.length; i++) {
     const key = rest[i];
-    if (!['--root', '--dsh', '--tarball', '--port', '--json'].includes(key) || seen.has(key)) throw new Error('Unknown or duplicate option: ' + key);
+    if (!['--root', '--dsh', '--tarball', '--port', '--json', '--open'].includes(key) || seen.has(key)) throw new Error('Unknown or duplicate option: ' + key);
     seen.add(key);
     if (key === '--json') { options.json = true; continue; }
+    if (key === '--open') { options.open = true; continue; }
     if (rest[i + 1] === undefined || rest[i + 1].startsWith('--')) throw new Error('Missing value: ' + key);
     options[{ '--root': 'root', '--dsh': 'binary', '--tarball': 'tarball', '--port': 'port' }[key]] = rest[++i];
   }
   if (options.tarball && command !== 'prepare') throw new Error('--tarball is only supported by prepare');
+  if (options.open && command !== 'run') throw new Error('--open is only supported by run');
   if (options.port !== undefined && command !== 'run') throw new Error('--port is only supported by run');
   if (options.port !== undefined) {
     if (!/^\d+$/.test(options.port)) throw new Error('--port must be an integer from 0 to 65535');
@@ -37,18 +43,14 @@ export function parseBotArgs(argv) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  const parsed = parseBotArgs(argv);
+  return runBotCommand(parseBotArgs(argv));
+}
+
+export async function runBotCommand(parsed) {
   if (parsed.help) { process.stdout.write(HELP); return; }
   const { command, options } = parsed;
   if (command === 'run') {
-    const child = startBot(options);
-    const forward = signal => child.kill(signal);
-    const interrupt = () => forward('SIGINT'); const terminate = () => forward('SIGTERM');
-    process.on('SIGINT', interrupt); process.on('SIGTERM', terminate);
-    await new Promise((resolve, reject) => {
-      child.once('error', reject);
-      child.once('close', (code, signal) => { process.exitCode = code ?? (signal === 'SIGINT' ? 130 : 1); resolve(); });
-    }).finally(() => { process.off('SIGINT', interrupt); process.off('SIGTERM', terminate); });
+    process.exitCode = await runBotForeground(options);
     return;
   }
   const result = command === 'plan' ? botPlan(options) : command === 'prepare' ? await prepareBot(options) : checkBot(options);
