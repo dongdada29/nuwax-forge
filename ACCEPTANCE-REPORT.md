@@ -1,5 +1,7 @@
 # nuwax-devkit 独立验收
 
+> 历史归档：2026-10-27 的独立验收记录；五包、旧目录与本地分发结论只适用于该次基线。 当前状态见[文档导航](docs/README.md)，历史资料见[归档索引](docs/archive/README.md)。
+
 2026-10-27。审核人 Codex。结论：**本地 source-tooling 与五包离线分发验收通过**。实现由用户允许的 Claude Code 执行；Codex 负责退回缺陷、独立测试、安装包检查和本记录。GUI live 和全局剩余指标未随本结论放行。
 
 ## 已交付

@@ -69,8 +69,16 @@ nuwax-forge dashboard --ledger /path/crew-usage.jsonl --registry /path/executors
   --task-store /path/tasks.sqlite --agent-state-root /path/agent-runs --out /path/dashboard.html
 ```
 
-`--task-store`、`--agent-state-root`、`--agent-state`、`--host-budget`、`--health`、`--matrix` 均可省略；agent-state-root 只读取一层直接子目录，agent-state 指向单次运行目录；host-budget 接受 `nuwax-forge budget guard --json` 的输出，按 router 与 worker 展示该快照。仅读本地文件，不调用模型或平台；输出不得覆盖输入。旧任务库没有 Assignment 表时显示未接入，不迁移数据库。
+`--task-store`、`--agent-state-root`、`--agent-state`、`--host-budget`、`--personal-agent-snapshot`、`--health`、`--matrix` 均可省略；agent-state-root 只读取一层直接子目录，agent-state 指向单次运行目录；host-budget 接受 `nuwax-forge budget guard --json` 的输出，按 router 与 worker 展示该快照。`--personal-agent-snapshot` 只读操作者导出的 PA 任务详情快照，不访问 PA 实例或数据库，见 [PA 适配](../../docs/PERSONAL-AGENT-ADAPTER.md)。输出不得覆盖输入。旧任务库没有 Assignment 表时显示未接入，不迁移数据库。
 
 按来源、执行器、角色和声明模型展示任务与用量。Crew 同一尝试的派工及结果事件按 attempt/step 关联；没有 attemptId 的历史记录无法可靠去重。不同来源可能记录同一次执行，分别显示，不作跨来源总和。未知 token 和模型调用数显示 unknown，已知的 0 保留为 0；模型名是运行声明，不代表供应商账单或完整宿主消耗。host-budget 的任务列是宿主会话 ID，快照不含之后的消耗；看板不会自动发现其他主机会话，静态页面不会自动发布或刷新。
 
 需要持续观察时，将 `--out` 换成 `--serve --port 0 --refresh-seconds 5`。该命令前台监听 `127.0.0.1`，输出 URL；页面按间隔读取已指定来源，也可手动刷新，并显示台账最后写入时间。快照输入（例如 host-budget）只有文件本身更新才变化。路由关系只展示来源中有证据的关联，Router 身份缺失时显示未记录。结束前台进程即可关闭。
+
+## 原版 DS-Bot 团队
+
+`nuwax-forge bots plan|prepare|check|run --root <独立绝对目录> --dsh <指定DSH绝对路径>` 使用固定 `ds-bot@0.2.7` 和 DSH `0.2.1-rc.5`。首次 root 必须不存在；prepare 校验原归档并创建隔离 profile，不迁移已有凭据。可给 prepare 提供 `--tarball <原始tgz>`，依赖安装仍可能联网。
+
+`bots run` 前台运行原宿主，仅显式 `--open` 打开系统浏览器；Ctrl-C 停止宿主，重用同一 root 保留团队。run 不支持 `--json`，plan/prepare/check 不发送模型消息。用户在原 UI 配置模型后，问候和后续操作可能消费模型；无 Key 的原 UI 建群也会尝试问候并被缺凭据阻断。
+
+完整命令见 [Bot 快速开始](../../docs/BOT-QUICKSTART.md)，各层证据见 [Bot 汇总](../../docs/BOT-INTEGRATION.md)。Bot → Forge 桥须[单独配置](../../docs/BOT-FORGE-BRIDGE.md)，仅 prepare/status；它与 PA 快照展示不构成自动任务审批或执行链。功能已在源码主线合并，使用已有安装时先核对版本和帮助。

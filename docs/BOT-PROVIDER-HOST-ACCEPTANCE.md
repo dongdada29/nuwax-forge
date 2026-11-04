@@ -1,5 +1,7 @@
 # 原生宿主到本地模型服务的验收
 
+记录状态：2026-11-04 本批测试已合入主线；此处为本地模拟服务证据，当前能力汇总见 [BOT-INTEGRATION.md](BOT-INTEGRATION.md)。
+
 `bots-provider-host.test.mjs` 使用真实 DSH `0.2.1-rc.5`、固定原版 `ds-bot@0.2.7` 和仅监听 `127.0.0.1` 的 OpenAI-compatible 模拟服务。它补上原来“模型未配置”验收没有覆盖的传输链路，不调用外部模型。
 
 测试通过原 `/api/bot` 的 `provider-add` 注册本地 provider 和两个不同模型，再由 `create-bot`、`send`、`chat` 完成两份独立私聊。请求经过 DSH 原生 provider adapter；测试不替换宿主、Bot 模块、Session 或模型路由实现。

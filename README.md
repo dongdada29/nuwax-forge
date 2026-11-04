@@ -1,17 +1,12 @@
 # nuwax-forge
 
-独立验收：source-tooling、五包离线分发及 Nuwax client 的具名 GUI 场景通过。新增内置 token 预测与实耗对账，并接入执行前/步间拦截。最新见 [执行预算与浪费拆分验收](docs/EXECUTION-BUDGET-ACCEPTANCE-20261027.md)；GUI阶段见 [本次 GUI/token 验收](docs/CLIENT-GUI-TOKEN-ACCEPTANCE-20261027.md)；前期固定流程对比见 [原验收报告](ACCEPTANCE-REPORT.md)。
+Nuwax Forge 提供有预算和短上下文约束的有限 Agent 执行、原版 DS-Bot 长期团队，以及本地任务与用量看板。Stack / Crew / Kit 保持内部模块；Bot 的持久身份与一次 Forge Worker 执行分别管理。当前为六包 npm workspace，包版本仍采用本地预发布版本号。
 
-nuwax 全局效率方案的**可运行多包仓库**：把 2026-10-27 client-efficiency-pilot 验收通过的
-stack / crew / kit 三条源码线（含未跟踪实现与 dot 配置）整编为 npm workspaces，并新增
-共享契约包与统一 CLI。**本地预发布，不发布到任何 registry。**
+当前文档入口：[文档导航](docs/README.md) · [架构](docs/ARCHITECTURE.md) · [能力与验收边界](docs/CAPABILITIES.md)。
 
-文档唯一入口是本 README；细节见 [docs/](docs/)：
-[架构](docs/ARCHITECTURE.md) · [能力分级](docs/CAPABILITIES.md) · [迁移与来源](docs/MIGRATION.md) ·
-[试点基线数据](docs/PILOT-BASELINE.md) · [DSH/GUI 评审（脱敏）](docs/DSH-GUI-DRIVER-REVIEW.md) ·
-[交付结果](IMPLEMENTATION-RESULT.md) · [Token 预算功能](docs/TOKEN-BUDGET.md) · [GUI 驱动用法](docs/MIDSCENE-LIVE.md)。
-
-v3.0.26 修复场景实跑发现了环境变化后仍复用旧通过结论的问题；复现证据、验收边界和改进顺序见 [2026-10-29 实跑优化方案](docs/IMPROVEMENT-PROPOSAL-20261029.md)。该修复批次现调整为 v3.1.0，历史证据保留采集时版本标识。修复复用问题前相关验收应使用全新执行结果。
+- 使用 Bot：[启动指引](docs/BOT-QUICKSTART.md)、[接入与验收汇总](docs/BOT-INTEGRATION.md)、[Bot → Forge 工具桥](docs/BOT-FORGE-BRIDGE.md)。
+- 有限执行与看板：[Agent 适配](docs/CLIENT-AGENTS.md)、[Token 预算](docs/TOKEN-BUDGET.md)、[DSH 看板](docs/DSH-DASHBOARD-INTEGRATION.md)、[Personal Agent 只读快照](docs/PERSONAL-AGENT-ADAPTER.md)。
+- 安装与验证：[离线安装](docs/INSTALLATION.md)、[集成测试入口](docs/INTEGRATION-TESTS.md)。早期试点数据和旧版改进提案归入[历史文档索引](docs/archive/README.md)，仅代表采集时的版本与环境。
 
 ## 包
 
@@ -22,10 +17,10 @@ v3.0.26 修复场景实跑发现了环境变化后仍复用旧通过结论的问
 | nuwax-crew | `@nuwax-ai/devkit-crew` | 有限调用路由与执行验收（Python 标准库） |
 | nuwa-sdlc-kit | `@nuwax-ai/nuwa-sdlc-kit`（保留原名） | 仓内规则层 + 固定配方运行器（kit/VERSION 1.5.0） |
 | contracts | `@nuwax-ai/devkit-contracts` | verification-v1 正本 schema、level 边界、GUI 合成 fixture 校验器 |
-| cli | `@nuwax-ai/devkit-cli` | `nuwax-forge` 命令（doctor / init / verify / run / gui run / budget estimate / budget reconcile） |
+| cli | `@nuwax-ai/devkit-cli` | `nuwax-forge` 统一入口：安装诊断、验收、有限执行、预算、Bot 团队和看板 |
 
 要求：**Node >= 22，Python >= 3.10（标准库）**；npm 分发只携带 Python 源码，运行仍需本机 Python。
-零外部依赖，无 Nx/Turbo/TS 构建。版本策略统一为 `X.Y.Z-devkit-local.N` 本地预发布；
+核心六包使用仓内依赖，不引入 Nx/Turbo/TS 构建。DS-Bot、DSH 和可选 GUI 运行时需单独准备。版本策略统一为 `X.Y.Z-devkit-local.N` 本地预发布；
 CLI 对 5 个兄弟包用**精确同版本**依赖（workspace 内本地链接，tarball 消费者离线可装）。
 
 ## 快速开始（真实命令）
@@ -66,8 +61,7 @@ node packages/cli/bin/nuwax-forge.mjs verify --project <外部项目> --state <�
 node packages/cli/bin/nuwax-forge.mjs run --plan <plan.json> --project <项目> --state <仓外目录> --brief-file <有限交接.txt>
 # 显式附着已授权的本机 CDP；SDK、Puppeteer、登录和模型环境需提前就绪
 node packages/cli/bin/nuwax-forge.mjs gui run --recipe <场景.json> --state <仓外目录> \
-  --budget-spec <任务预算.json> --cdp http://127.0.0.1:19222 --sdk <Midscene包目录> --runtime <Puppeteer包目录> --budget-spec <预算.json> --json
-node packages/cli/bin/nuwax-forge.mjs run --plan <plan.json> --project <工作目录> --state <仓外目录> --brief-file <有限正文.txt>
+  --budget-spec <任务预算.json> --cdp http://127.0.0.1:19222 --sdk <Midscene包目录> --runtime <Puppeteer包目录> --json
 node packages/cli/bin/nuwax-forge.mjs budget estimate --spec <任务预算.json> --out <预测.json> --json
 node packages/cli/bin/nuwax-forge.mjs budget reconcile --estimate <预测.json> --actual <GUI-manifest.json> \
   --history <校准.jsonl> --out <对账.json> --json
@@ -79,8 +73,8 @@ node packages/cli/bin/nuwax-forge.mjs budget reconcile --estimate <预测.json> 
 
 ## 边界（如实）
 
-- source-tooling 固定流程可复用；GUI 动态证据默认不复用。真实通过范围是 macOS 已安装 Nuwax 3.0.23 的首页草稿输入、视觉确认与清空恢复；三次正向样本及一次失败对照见验收报告。
+- source-tooling 固定流程可复用；GUI 动态证据默认不复用。Nuwax 3.0.23 的具名 GUI 场景属于 2026-10-27 历史样本，不能代表当前客户端或发布包验收，见[历史记录](docs/archive/README.md)。
 - Midscene 是显式可选运行时；默认 install/test/pack 不安装 SDK、不调用模型、不打开应用。当前支持附着，`--launch-config` 明示 unsupported。
-- client CDP 配置代码已加入源码，默认关闭、只允许本机、重启生效。当前已安装包尚未包含该源码；本次真实验证临时使用启动参数，用后已恢复并关闭端口。
-- client 全量测试的前期基线存在 5 项既有失败；本次没有进行产品构建、发布、跨机器或 Windows/Linux 产品验收。重复产品构建仍是 0→0，不能声称构建提速。
-- 新仓为本地多包预发布，无 commit、无 remote；本次未发布 registry。源仓仅含用户明确接受的 client CDP 诊断开关改动，其余业务改动不属于本任务。
+- Bot 的真实宿主和本地模拟 provider 路由已验证；记忆与群协作有原生模块契约证据。真实模型自主调用、完整群详情布局和系统默认浏览器启动仍未验，见 [Bot 汇总](docs/BOT-INTEGRATION.md)。
+- Bot → Forge 桥仅提供 prepare/status；PA 接入仅展示操作者导出的本地快照。任务、审批、恢复和人工交付仍由原系统管理。
+- 2026-11-04 主线基线 `c5327dd` 的[远程 CI](https://github.com/dongdada29/nuwax-forge/actions/runs/41788073227) 已通过测试、契约校验与打包。这不代表已升级用户安装、部署平台或完成产品/跨平台验收；缺失用量仍为 unknown，预算不提供供应商 token 硬上限。

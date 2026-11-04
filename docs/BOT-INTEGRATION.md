@@ -1,8 +1,10 @@
-# DS-Bot 接入切片
+# DS-Bot 接入与验收汇总
 
-Forge 通过真实 DeepSeek Harness (DSH) 的插件管理器组合原版 DS-Bot，提供一个独立、可检查、可显式启动的 Bot 团队。公共入口为 `nuwax-forge bots plan|prepare|check|run`，独立入口 `packages/cli/lib/bots/entry.mjs` 保留；尚未接入 Dashboard 或 personal-agent。没有复制 Bot 引擎、Cordis runtime、任务系统、SSH 层或 Electron 外壳。首次使用见 [BOT-QUICKSTART.md](BOT-QUICKSTART.md)。
+状态核对：2026-11-04，main `c5327dd` 已包含本页汇总的 Bot 接入、公共入口、工具桥及专项测试。首次使用见 [BOT-QUICKSTART.md](BOT-QUICKSTART.md)，全仓文档见[导航](README.md)。
 
-Bot 是持久身份：Chief 管理团队，每个 Bot 的模型、Session、记忆和群成员关系由原 DS-Bot 保存。Forge Worker 仍是一次有界执行；本切片没有让 Bot 自动派 Worker，也没有新增审批通道。后续接线须复用 personal-agent 的用户任务和审批，才能把 Bot 请求转成 Forge 执行，不能把持续对话等同于一次任务。
+Forge 通过真实 DeepSeek Harness (DSH) 的插件管理器组合原版 DS-Bot，提供独立、可检查、可显式启动的 Bot 团队。公共入口为 `nuwax-forge bots plan|prepare|check|run`；独立入口 `packages/cli/lib/bots/entry.mjs` 保留。Bot 身份、群、模型、Session 和记忆仍由原 DS-Bot 管理。
+
+Bot 是持久身份，Forge Worker 是一次有界执行。[Bot → Forge 桥](BOT-FORGE-BRIDGE.md) 已提供原生 prepare/status 工具，需操作者单独配置，不随 `bots prepare/run` 自动启用；未开放 run/approve/reconcile 工具。已有 [DSH 看板插件](DSH-DASHBOARD-INTEGRATION.md) 展示 Forge 任务，[PA 快照适配](PERSONAL-AGENT-ADAPTER.md) 只读显示原任务与交付。这些分别可用的入口不构成 Bot → PA → Forge 的完整自动业务链；原任务、审批与恢复仍由原系统管理。
 
 ## 固定来源
 
@@ -35,15 +37,15 @@ mkdir -p "$HOME/.local/share/nuwax-forge/bots"
 FORGE_BOT_ROOT="$HOME/.local/share/nuwax-forge/bots/team-demo"
 FORGE_DSH_BINARY='/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
 
-node packages/cli/lib/bots/entry.mjs plan --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY" --json
-node packages/cli/lib/bots/entry.mjs prepare --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY" --json
-node packages/cli/lib/bots/entry.mjs check --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY" --json
-node packages/cli/lib/bots/entry.mjs run --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY"
+node packages/cli/bin/nuwax-forge.mjs bots plan --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY" --json
+node packages/cli/bin/nuwax-forge.mjs bots prepare --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY" --json
+node packages/cli/bin/nuwax-forge.mjs bots check --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY" --json
+node packages/cli/bin/nuwax-forge.mjs bots run --root "$FORGE_BOT_ROOT" --dsh "$FORGE_DSH_BINARY" --open
 ```
 
 `run` 在前台运行真实 DSH web app，固定绑定 `127.0.0.1`，默认端口 `0` 由系统分配，也可显式传 `--port 3081`。宿主输出自己的本地访问链接；打开该链接进入原 DS-Bot 界面。仅显式加 `--open` 才调用系统默认浏览器，失败时保留前台宿主并提示手动打开。Ctrl-C 停止宿主，团队数据保留，可用同一命令重启。入口不发送消息、不创建 provider；新团队的 Chief 等待选择模型。原 UI 建群会尝试自动问候，无 Key 时被缺凭据阻断；配置模型后问候和后续操作可能调用模型。
 
-以上独立命令亦可写为 `node packages/cli/bin/nuwax-forge.mjs bots <子命令> ...`，已安装 CLI 时为 `nuwax-forge bots <子命令> ...`；两种入口复用相同严格参数校验。
+源码检出先按[启动指引](BOT-QUICKSTART.md)绑定本地 workspace 包。已安装且包含此功能的 CLI 可用 `nuwax-forge bots <子命令> ...`；独立入口为 `node packages/cli/lib/bots/entry.mjs <子命令> ...`，两种入口复用相同严格参数校验。源码已合并不等于原有安装自动升级。
 
 已有原始 npm 归档时，可给 `prepare` 加 `--tarball /absolute/path/ds-bot-0.2.7.tgz`。该文件仍必须通过同一固定 SRI；此选项只避免 DS-Bot 归档下载，DSH 插件管理器解析/安装依赖仍可能需要网络。`prepare` 不会运行模型。
 
@@ -69,27 +71,40 @@ node packages/cli/lib/bots/entry.mjs run --root "$FORGE_BOT_ROOT" --dsh "$FORGE_
 
 若进程被强制杀死而留下 `.forge-bots-lock`，先确认本 root 的宿主已完全退出，再移除此单个锁目录；入口不会替用户抢锁或终止其它实例。
 
-## 可重复验收
+## 验收状态与复验
 
-默认测试不下载、不安装、不运行模型；真实宿主测试显式开启，使用全新临时 root 并在退出后清理。
-
-```sh
-node --test packages/cli/test/bots-*.test.mjs
-
-FORGE_BOT_TEST_DSH='/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh' \
-FORGE_BOT_TEST_TARBALL=/absolute/path/ds-bot-0.2.7.tgz \
-node --test packages/cli/test/bots-*.test.mjs
-```
-
-2026-11-04 本机实测 DSH `0.2.1-rc.5`：8 项测试通过，包含真实宿主集成测试。真实测试用原生令牌换取会话 cookie，仅在内存中使用；只输出布尔值和计数。
+以下是 2026-11-04 本批验收的范围汇总；默认测试、fixture、真实宿主与真实模型分别解释，不将任一层等同于全部产品通过。
 
 | 层次 | 已观察证据 | 仍未证明 |
 | --- | --- | --- |
-| 安装/组合 | 固定归档 SRI、7 个原文件 hash、web+bot bundle、启用的原入口、独立数据路径 | 其它 DSH/DS-Bot 版本兼容性 |
-| 真实宿主/客户端 | 原 DSH 启动；HTML 模块目录发现 `ds-bot`；原编译客户端 HTTP 200；无 cookie 的 Bot 请求 HTTP 401；另经 nuwa-browser 实看 Chief 模型等待卡/模型设置、原 UI 新建 Bot/群、访问群详情控件与 `@` 候选 | 真实模型交互、完整群详情面板布局、移动布局、系统默认浏览器打开 |
-| Chief/持久身份 | 原 `/api/bot` 返回 Chief、`waiting=true`、无模型；两个 Bot 各有不同 Session；重启后 IDs 保留 | 不同模型路由的实际回答 |
-| 群数据 | 原 API 创建 3 成员群，Chief 为 admin、`mode=admin`；重启后群保留；不存在成员被拒绝 | admin-first 发言顺序、`@` 点名及并行派发 |
-| 记忆读取边界 | 两 Bot 面板分别返回 own/team，群仅返回 group；不存在 Bot 被拒绝 | 写入/回读隔离、自动审查、跨 Bot 私有权限及重启后的非空记忆 |
-| 失败对照 | 错误宿主版本、破损归档、禁用原入口、目录重定向、无认证及无效对象均拒绝 | 模型或工具运行时故障恢复 |
+| 安装/配置组合 | 固定归档 SRI、7 个核心文件 hash、启用的原入口、独立数据路径 | 其他 DSH/DS-Bot 版本兼容性；用户既有安装已升级 |
+| 真实宿主/原客户端 | 原客户端 HTTP 200、未认证请求 401、原 API 身份/群持久化；原生链接捕获、SIGINT 停止与解锁 | 系统默认浏览器实际打开、跨平台生命周期 |
+| 原生浏览器操作 | Chief 等待卡、模型设置、新建 Bot/群、群详情控件与 @ 候选可访问 | 完整群详情面板布局、移动布局、真实模型交互；见[启动指引记录](BOT-QUICKSTART.md) |
+| 真实宿主模型传输 | 两个 Bot 绑定不同本地模拟模型，经原 API 发送并从原 chat 回读对应回复，私聊标记未串路由 | 付费 provider、推理/工具选择、模型语义；见[provider 专项](BOT-PROVIDER-HOST-ACCEPTANCE.md) |
+| 原生记忆 + fixture 服务 | 非空 own/team/group、私有权限、角色/成员拒绝、独立 home、journal、正常关闭后的跨进程回读 | 真实 DSH 非空面板、memory-ask、模型提取/总结/审查、崩溃恢复；见[记忆专项](BOT-MEMORY-ACCEPTANCE.md) |
+| 原生群路由 + fixture 服务 | 成员独立 Session/模型、admin-first、@ 并发/去重、Bot 回复派发与权限拒绝 | 真实 DSH 完整循环、真实模型群协作与信息分享行为；见[群专项](BOT-GROUP-ROUTING-ACCEPTANCE.md) |
+| Bot → Forge 桥 | 12 项离线测试；真实 Cordis/tools 注册、prepare/status、guard、取消及卸载 | Chief 自主选择工具、聊天业务端到端；见[工具桥](BOT-FORGE-BRIDGE.md) |
 
-上述 API 测试确认没有可用模型、所有 Bot 问候保持等待，未发送任何消息。原用户 API 的 `memory-ask` 会调用模型，测试没有调用它，也没有直接改记忆文件来代替产品路径。`modelCallsRequested=0` 仅表示这组 API 测试没有请求模型调用，并非模型费用审计结果。另一次原生浏览器验收的新建群聊自动问候尝试被 `MISSING_CREDENTIAL` 阻断，不能套用该零请求结论；详见快速指引的验收记录。完整验收仍需用户授权模型后，实际建模配置、消息、记忆写读、群管理与 `@` 调度。
+群成员的 Session 独立，但首次群提示会注入该成员自己的私聊摘要。fixture 没有观察到直接读取其他 Bot 私聊；不能由此推断真实模型不会复述自身信息。该语义与记忆工具的私有权限测试分别判断，见群专项的完整调用链。
+
+默认无 opt-in 环境变量时，下列命令不下载、不安装、不运行宿主或模型；需要真实宿主的项明确跳过：
+
+```sh
+node --test packages/cli/test/bots-*.test.mjs
+```
+
+完整复跑本批 Bot 证据需显式提供真实 DSH 和固定原始 npm 归档。`FORGE_BOT_ROUTING_TARBALL` 启用群模块契约，`FORGE_BOT_TEST_PROVIDER_HOST=1` 启用真实宿主到本地模拟服务的传输；仅设置 DSH 变量并不会启用全部专项。
+
+```sh
+FORGE_BOT_TEST_DSH='/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh' \
+FORGE_BOT_TEST_TARBALL=/absolute/path/ds-bot-0.2.7.tgz \
+FORGE_BOT_ROUTING_TARBALL=/absolute/path/ds-bot-0.2.7.tgz \
+FORGE_BOT_TEST_PROVIDER_HOST=1 \
+node --test packages/cli/test/bots-*.test.mjs
+```
+
+2026-11-04 组合验收：上述 Bot 测试 27/27；另含记忆子进程 8/8。追加 `packages/cli/test/dashboard-personal-agent.test.mjs` 的 Bot/PA 检查为 28/28；全量 CLI 132 通过、15 项按默认边界跳过。这些是本批基线记录，不是每次运行应固定不变的计数。主线 `c5327dd` 的[CI](https://github.com/dongdada29/nuwax-forge/actions/runs/41788073227) 已通过测试、契约校验和打包；文档整理未重跑模型或产品验收。
+
+真实宿主测试使用全新临时 root，启动令牌和 cookie 仅在内存中使用，结束停止自建实例并清理。显式原生测试的依赖安装仍可能联网。固定 fixture 的 usage 数字不作费用证据，完整真实用量未知时仍记 unknown。
+
+原无模型 API 测试没有发送消息，`modelCallsRequested=0` 仅适用于那组测试。原 UI 建群会尝试自动问候，缺凭据时被 `MISSING_CREDENTIAL` 阻断；本地 provider 测试也实际产生模拟模型请求，均不能套用零请求结论。真实模型验收还需在获授权的独立实例中完成对话、工具选择、记忆与群协作。

@@ -1,4 +1,4 @@
-# CI 定义（未在远程运行过，不声称已跑；本机运行时未改动）。本地等价命令即 README 的 install/test/pack。
+# 远程 CI：离线安装、测试、契约一致性与打包；真实宿主/浏览器/模型验收另行显式运行。
 name: ci
 on: [push, pull_request]
 jobs:
