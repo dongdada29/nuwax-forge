@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { realpathNearestExisting, isInside } from '../packages/cli/lib/paths.mjs';
+import { stageCliPackage } from './bridge-runtime.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const START = Date.now();
@@ -48,7 +49,7 @@ if (isInside(rootReal, outReal) || isInside(outReal, rootReal)) {
 mkdirSync(out, { recursive: true });
 
 const before = new Set(readdirSync(out).filter(f => f.endsWith('.tgz')));
-const packed = spawnSync('npm', ['pack', '--workspaces', '--ignore-scripts', '--offline', '--pack-destination', out],
+const packed = spawnSync('npm', ['pack', ...['contracts', 'dashboard', 'nuwax-crew', 'nuwax-stack', 'nuwa-sdlc-kit'].flatMap(name => ['--workspace', `packages/${name}`]), '--ignore-scripts', '--offline', '--pack-destination', out],
   { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 if (packed.status !== 0) {
   process.stdout.write(packed.stdout ?? '');
@@ -56,6 +57,13 @@ if (packed.status !== 0) {
   process.exit(packed.status ?? 1);
 }
 process.stdout.write(packed.stdout);
+const staging = stageCliPackage(ROOT);
+try {
+  const cliPack = spawnSync('npm', ['pack', '--ignore-scripts', '--offline', '--pack-destination', out],
+    { cwd: staging.directory, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 30000 });
+  if (cliPack.error || cliPack.status !== 0) throw Error('CLI package staging failed: ' + (cliPack.error?.code ?? cliPack.stderr));
+  process.stdout.write(cliPack.stdout);
+} finally { staging.cleanup(); }
 
 const FORBIDDEN = [/(^|\/)registries\/mbp[^/]*/i, /(^|\/)\.git(\/|$)/, /(^|\/)\.env($|\.)/, /(^|\/)node_modules\//, /credentials?($|\.)/i];
 const expected = expectedTarballs();

@@ -14,7 +14,7 @@
     "pack": "node scripts/pack.mjs",
     "contracts:sync": "npm --workspace @nuwax-ai/devkit-contracts run sync",
     "contracts:check": "npm --workspace @nuwax-ai/devkit-contracts run check",
-    "test:install": "node --test scripts/offline-install.test.mjs",
+    "test:install": "node --test scripts/offline-install.test.mjs scripts/bridge-runtime.test.mjs",
     "test:integrations:offline": "node scripts/test-integrations-offline.mjs"
   }
 }
