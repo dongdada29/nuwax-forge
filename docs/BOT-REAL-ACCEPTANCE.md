@@ -89,7 +89,7 @@ provider 的 `maxTokens` 是默认值，可被请求显式输出参数覆盖；�
 
 最小复验脚本 `scripts/bot-real-ui-acceptance.mjs` 负责显式默认浏览器打开、前后原 API 计数和退出；完整布局仍以本次实际浏览器采样为准。该脚本的离线边界测试与上述手工真实执行分开报告，不将脚本存在当作每条现场操作已自动复跑。
 
-脚本目前仅支持 macOS 默认浏览器为 `ego lite.app`，需要已安装 `ego-browser` CLI。root 和输出文件均必须是新路径；若默认应用不同应改用原生观察，不套用本脚本结论。它不配置模型或执行布局点击，默认模型目录基线不是空团队时会停止。该脚本本轮未再次实机执行，以免重复触发尚未解释的目录变化：
+脚本目前仅支持 macOS 默认浏览器为 `ego lite.app`，需要已安装 `ego-browser` CLI。root 和输出文件均必须是新路径；若默认应用不同应改用原生观察，不套用本脚本结论。它不配置模型或执行布局点击，默认模型目录基线不是空团队时会停止。SIGINT/SIGTERM 进入取消和自有进程组清理；同步浏览器观察最多 20 秒，信号可能在该同步操作返回后才处理，不承诺即时退出。该脚本本轮未再次实机执行，以免重复触发尚未解释的目录变化：
 
 ```sh
 mkdir -p "$HOME/.local/share/nuwax-forge/acceptance"
@@ -106,8 +106,31 @@ node scripts/bot-real-ui-acceptance.mjs --open \
 node --test packages/cli/test/bots-real-preflight.test.mjs packages/cli/test/bots-real-ui.test.mjs
 ```
 
-5 项预检边界与脱敏测试、2 项浏览器脚本参数/元数据测试已通过。以本批源码运行全量 CLI 为 139 通过、15 项默认 opt-in 跳过、0 失败。真实 preflight 已实际运行并读到 signed-out；浏览器脚本本身的端到端自动复跑仍未验证，不能与上表实际手工页面观察混为一谈。
+6 项预检边界、脱敏和预取消测试，以及 3 项浏览器脚本参数/元数据/预取消测试已通过。全量 CLI 默认并行检查有一次 140 通过、1 失败、15 跳过：既有 client-workflow 的 `test_final_exit_usage_is_checked` 期望 observed-token-limit，实际为 missing-usage；独立复跑其 Node 套件 2/2 通过。补充 `--test-concurrency=1` 的全量 CLI 检查为 141 通过、15 跳过、0 失败，该结果不抹去默认并行失败。未修改该用例或其运行器，不将它宣称为已修复。真实 preflight 已实际运行并读到 signed-out；浏览器脚本本身的端到端自动复跑仍未验证，不能与上表实际手工页面观察混为一谈。
 
 ## 本轮结论
 
 已补齐本机系统默认浏览器实际打开、1274×666 下完整群详情以及正常停止/解锁的证据。新预检通过原生接口确认其独立实例没有本地账号 grant；真实模型对话、模型记忆写读/重启回读、Chief 自主选择 Forge 工具仍未运行。下一步需要在待用的新实例完成原生授权或由用户配置 provider，并在考虑自动问候、记忆重试和后台审查后明确实验范围与停止条件。
+
+## 用户选择登录后的专用实例
+
+上述预检临时团队已删除、UI 验收宿主也已停止，它们不是可继续登录的入口。用户决定继续授权后，按以下顺序准备新的待用实例；在用户选择前不发送依赖认证的模型请求。
+
+1. 选择一个尚不存在的新 root，使用公共 `bots prepare` 和固定 DSH/原归档准备。保留该 root 供同一用户后续使用，不迁移任何既有 profile 或 key。
+2. 前台启动 `bots run --open`，确认本机原生 Chief 页面已经打开且宿主仍运行。原访问链接仅用于本机启动，不复制到聊天、仓库或报告；浏览器标签关闭不等于停止宿主。
+3. 由用户在这个仍在运行的窗口进入 Account → Sign in 并完成新实例授权，或在原生模型设置表单配置自己的 provider。若需要交还浏览器控制，等待用户明确完成后再恢复；不代填或索要聊天中的 key。
+4. 通过该实例原 UI 或只读 `account/getState` 确认状态，只报告 signed-out/credential-stored 等枚举；记录存在仍需与有效授权分开。此时先不自动选择模型，因为选择可能释放 Chief 问候。
+5. 明确本次允许的自动问候、实验路径、请求/输出预算、墙钟截止和失败停止条件后，再选择模型并执行最小实验。若无法验证要求的调用上限，则保持未运行，不把目录存在或 provider 默认参数当作限额保证。用户完成操作后停止本实例并确认锁释放；已写入用户授权的专用 root 不随意删除。
+
+在仓库根目录准备/启动的命令形状如下，root 必须另选新目录：
+
+```sh
+mkdir -p "$HOME/.local/share/nuwax-forge/bots"
+FORGE_AUTH_ROOT="$HOME/.local/share/nuwax-forge/bots/new-authorized-team"
+FORGE_AUTH_DSH='/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
+node packages/cli/bin/nuwax-forge.mjs bots prepare \
+  --root "$FORGE_AUTH_ROOT" --dsh "$FORGE_AUTH_DSH" \
+  --tarball /absolute/path/ds-bot-0.2.7.tgz
+node packages/cli/bin/nuwax-forge.mjs bots run \
+  --root "$FORGE_AUTH_ROOT" --dsh "$FORGE_AUTH_DSH" --open
+```

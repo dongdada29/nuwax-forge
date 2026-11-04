@@ -55,13 +55,16 @@ export function summarizeAccountState(envelope, rpcId) {
   return { accountMetadata: 'available', accountStatus: status, accountGrantStored: status === 'credential-stored' };
 }
 
-export async function preflight(options) {
+export async function preflight(options, { signal } = {}) {
+  signal?.throwIfAborted();
+  const requestSignal = () => signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000);
   const parent = mkdtempSync(join(tmpdir(), 'forge-bot-real-preflight-'));
   const root = join(parent, 'fresh-team');
   let child; let closed; let output = ''; let processError;
   let stage = 'prepare';
   try {
     const prepared = await prepareBot({ ...options, root });
+    signal?.throwIfAborted();
     stage = 'start';
     child = startBot({ ...options, root }, ['ignore', 'pipe', 'pipe']);
     closed = new Promise(resolve => { child.once('close', resolve); child.once('error', resolve); });
@@ -70,6 +73,7 @@ export async function preflight(options) {
     child.stdout.on('data', capture); child.stderr.on('data', capture);
     let launch;
     for (let n = 0; n < 200; n++) {
+      signal?.throwIfAborted();
       launch = output.match(/http:\/\/127\.0\.0\.1:\d+\/\?token=[^\s]+/)?.[0];
       if (launch || processError || child.exitCode !== null) break;
       await delay(100);
@@ -77,7 +81,7 @@ export async function preflight(options) {
     if (!launch || processError) throw new Error('Native launch unavailable');
     stage = 'authenticate';
     const origin = new URL(launch).origin;
-    const login = await fetch(launch, { redirect: 'manual', signal: AbortSignal.timeout(10000) });
+    const login = await fetch(launch, { redirect: 'manual', signal: requestSignal() });
     if (login.status !== 303) throw new Error('Native login refused');
     const cookie = login.headers.getSetCookie().map(value => value.split(';')[0]).join('; ');
     if (!cookie) throw new Error('Native login cookie missing');
@@ -85,7 +89,7 @@ export async function preflight(options) {
     const api = async endpoint => {
       const response = await fetch(origin + '/api/bot', {
         method: 'POST', headers: { 'content-type': 'application/json', origin, cookie },
-        body: JSON.stringify({ endpoint }), signal: AbortSignal.timeout(10000),
+        body: JSON.stringify({ endpoint }), signal: requestSignal(),
       });
       if (response.status !== 200) throw new Error('Native metadata refused');
       const result = await response.json();
@@ -100,7 +104,7 @@ export async function preflight(options) {
     const accountResponse = await fetch(origin + '/api/account/getState', {
       method: 'POST', headers: { 'content-type': 'application/json', origin, cookie },
       body: JSON.stringify({ type: 'client-request', rpcId, method: 'account/getState', payload: { args: {} } }),
-      signal: AbortSignal.timeout(10000),
+      signal: requestSignal(),
     });
     const account = accountResponse.status === 200
       ? summarizeAccountState(await accountResponse.json(), rpcId)
@@ -131,9 +135,17 @@ export async function main(argv = process.argv.slice(2)) {
     process.stdout.write('Usage: node scripts/bot-real-preflight.mjs --dsh <absolute-dsh> --tarball <absolute-original-tgz>\nFresh isolated root; metadata only; no model messages. Temporary instance is removed on exit.\n');
     return;
   }
-  process.stdout.write(JSON.stringify(await preflight(options), null, 2) + '\n');
+  const controller = new AbortController();
+  const interrupt = () => { process.exitCode = 130; controller.abort(); };
+  const terminate = () => { process.exitCode = 143; controller.abort(); };
+  process.on('SIGINT', interrupt); process.on('SIGTERM', terminate);
+  try {
+    process.stdout.write(JSON.stringify(await preflight(options, { signal: controller.signal }), null, 2) + '\n');
+  } finally {
+    process.off('SIGINT', interrupt); process.off('SIGTERM', terminate);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(error => { process.stderr.write(error.message + '\n'); process.exitCode = 1; });
+  main().catch(error => { process.stderr.write(error.message + '\n'); process.exitCode ||= 1; });
 }

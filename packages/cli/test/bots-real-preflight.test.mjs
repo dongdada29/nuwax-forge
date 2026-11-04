@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePreflightArgs, summarizeAuthorization, summarizeAccountState } from '../../../scripts/bot-real-preflight.mjs';
+import { parsePreflightArgs, summarizeAuthorization, summarizeAccountState, preflight } from '../../../scripts/bot-real-preflight.mjs';
 
 test('real preflight refuses existing-root/provider/credential arguments and requires explicit fixed inputs', () => {
   assert.deepEqual(parsePreflightArgs([]), { help: true });
@@ -60,4 +60,11 @@ test('account RPC summary keeps only local grant presence and refuses unrelated 
   }
   envelope.result.value.status = 'signed-out';
   assert.equal(summarizeAccountState(envelope, 'expected').accountGrantStored, false);
+});
+
+test('a pre-cancelled preflight refuses before touching paths or starting a binary', async () => {
+  const controller = new AbortController();
+  const reason = new Error('cancel-before-side-effects');
+  controller.abort(reason);
+  await assert.rejects(preflight({ binary: '/must-not-execute', tarball: '/must-not-read' }, { signal: controller.signal }), error => error === reason);
 });
