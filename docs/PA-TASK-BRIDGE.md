@@ -10,7 +10,7 @@ Bot 没有批准、控制、接收交付或结果导入工具。原 PA 的人工
 
 原生准入扩展 `db33b3f36dffc76a562eaae16974c7180997027f` 增加独立 intake 身份与原 Task 的创建前 `task_admission`：新任务强制 paused，只有原工作台的已配对人类身份可批准；intake 仅可 `POST /api/tasks`、`GET /api/tasks` 和读取自己的 `GET /api/tasks/:id`，不能批准或控制。intake 必须搭配 PA 的 paired 安全策略，匿名 loopback 不可开启。
 
-Forge Worker 扩展进一步支持 `engine:'forge'`、原 Task/准入请求中的声明来源，以及服务器按 workspace 固定的模板。本包按该协议实现；原 PA 仍负责权限、预算、验证命令、worktree、单 Worker 生命周期与结果入库。本包不会向旧 PA 降级成 fake/claude，不会用“先创建再暂停”绕过授权门，也不接受 Bot 自报批准。
+Forge Worker 扩展 `8240f5ece6743fa277c4454594e449d4a371933c` 进一步支持 `engine:'forge'`、原 Task/准入请求中的声明来源，以及服务器按 workspace 固定的模板。本包按该协议实现；原 PA 仍负责权限、预算、验证命令、worktree、单 Worker 生命周期与结果入库。本包不会向旧 PA 降级成 fake/claude，不会用“先创建再暂停”绕过授权门，也不接受 Bot 自报批准。
 
 ## 操作者配置与凭据
 
@@ -112,7 +112,9 @@ status 与 deliveryStatus 独立：completed 不等于 accepted，accepted 不�
 npm --prefix integrations/personal-agent-forge test
 ```
 
-28 项离线 HTTP fixture 测试覆盖默认关闭、独立 intake 与人类 Cookie 隔离、固定 POST/source、稳定命令重放/409、201 待审批、200 后续真实状态、指纹与跨来源核对、鉴权、状态码、重定向、大小、超时/取消、落库后丢失确认的原任务找回、未知用量等。fixture 端口由系统分配，不扫描。公共 test runner 未被本切片修改，需显式运行该入口。
+28 项离线 HTTP fixture 测试覆盖默认关闭、独立 intake 与人类 Cookie 隔离、固定 POST/source、稳定命令重放/409、201 待审批、200 后续真实状态、指纹与跨来源核对、鉴权、状态码、重定向、大小、超时/取消、落库后丢失确认的原任务找回、未知用量等。fixture 端口由系统分配，不扫描。默认 `npm run test:integrations:offline` 会枚举本目录全部 `*.test.mjs`，本次实测 50 项、49 通过、1 项明确 opt-in 跳过；后续新增测试不再依赖固定文件名列表。
+
+既有 Dashboard 的 PA executor 白名单同时保留明确的 `forge` 引擎标签；它只展示来源事实，不增加执行或批准能力。
 
 真实安装版 DSH 0.2.1-rc.5 的原生 registry/guard/dispatch 可复现：
 
@@ -136,3 +138,5 @@ node --import /absolute/isolated-pa/node_modules/tsx/dist/loader.mjs \
 ```
 
 脚本每次创建新的临时 PA DB、Git 仓库与配对身份；真 HTTP 验证 intake 提交/重放/冲突和原准入事实，intake 批准/控制被 403 拒绝。独立配对的 fixture 人类通过原 PA 路由批准后才触发 marker adapter，随后故意以 fixture 错误结束，不启动付费模型、真实 Forge Worker 或生产实例。它不改 PA 源码，也不使用生产数据。真实 UI 操作、渠道 Bot、真实 Worker/模型、发布安装与业务完整闭环仍须分层验收。
+
+2026-11-04 已在上述 PA `8240f5ec` 的干净隔离 clone 通过：原 paused/admission/source 与指纹、同 key 重放、换 goal 的 409、intake 批准/控制的 403、独立 paired 人类审批均通过；marker open 在批准前为 0、批准后为 1，随后重放如实返回原 approved admission 与 marker 故意停止后的 failed 状态。模型调用及生产实例访问均为 0，临时数据已清理，PA 源码保持干净。
