@@ -9,7 +9,7 @@ export function runDashboard(opts) {
   const crew = resolvePackage('@nuwax-ai/devkit-crew');
   if (!crew) throw new Error('未找到同安装 @nuwax-ai/devkit-crew');
   const args = ['-B', '-m', 'crew', 'dashboard'];
-  for (const key of ['ledger', 'registry', 'health', 'matrix', 'task-store', 'agent-state', 'agent-state-root', 'host-budget', 'out', 'port', 'refresh-seconds']) {
+  for (const key of ['ledger', 'registry', 'health', 'matrix', 'task-store', 'agent-state', 'agent-state-root', 'host-budget', 'approval-store', 'out', 'port', 'refresh-seconds']) {
     if (opts[key]) args.push('--' + key, opts[key]);
   }
   if (opts.serve) args.push('--serve');

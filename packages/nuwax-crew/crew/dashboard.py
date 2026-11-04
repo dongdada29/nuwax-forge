@@ -115,6 +115,10 @@ h2{font-size:14px;letter-spacing:.09em}.meta{line-height:1.7}
 .route-node.unknown{color:var(--dim);background:#202838;border-color:#344154}.route-count{color:var(--dim);margin-left:auto;white-space:nowrap;font-size:11px}
 .engine-grid{display:flex;gap:8px;flex-wrap:wrap}.engine-chip{border:1px solid #334b64;background:#1c2c40;border-radius:8px;padding:7px 10px;font-size:12px}.engine-chip small{display:block;color:var(--dim);margin-top:2px}
 .delivery-cell{min-width:180px;overflow-wrap:anywhere}.delivery-cell div+div{margin-top:4px}.delivery-cell a{color:var(--blue)}
+.approval-list{display:grid;gap:12px}.approval-card{padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.approval-card h3{font-size:16px;margin-bottom:8px}.approval-card p{margin:6px 0;overflow-wrap:anywhere}.approval-card pre{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink);font:12px/1.5 ui-monospace,monospace;margin-top:10px}
+.approval-card details{color:var(--dim);margin-top:10px}.approval-actions{display:flex;gap:8px;margin-top:14px}.approval-actions button{padding:8px 14px;border:1px solid var(--line);border-radius:7px;cursor:pointer;background:#244637;color:#b9f2d7}.approval-actions button[data-decision=rejected]{background:#4b2a30;color:#ffd0d2}
+.approval-pending{color:var(--amber)}.approval-approved{color:var(--green)}.approval-rejected{color:var(--red)}
 table{border-radius:10px;overflow:hidden}th{background:#1a2637}
 @media(max-width:1000px){.summary-card,.summary-card.wide{grid-column:span 6}}
 @media(max-width:650px){.summary-card,.summary-card.wide{grid-column:span 12}.donut{width:128px;height:128px}.summary-grid{gap:10px}.bar-row{grid-template-columns:110px 1fr 30px}header{align-items:flex-start;gap:10px}.meta{max-width:55%}}
@@ -187,7 +191,7 @@ def board_columns(matrix: list) -> list:
     return [(title, cls, buckets[title]) for title, _, cls in BOARD_COLUMNS]
 
 
-def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_rows: list, *, generated_at: str, records=None, notes=None) -> str:
+def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_rows: list, *, generated_at: str, records=None, notes=None, approval_items=None, approvals_actionable=False) -> str:
     ex = usage["perExecutor"]
     subs = usage["perSubscription"]
     total = sum(v["total"] for v in ex.values())
@@ -196,8 +200,10 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
     active = [n for n, v in ex.items() if v.get("enabled", True) and n not in health]
     ok_rate = f"{ok / total:.0%}" if total else "—"
 
+    pending_kpi = (f'<div class="kpi hot"><div class="n">{sum(1 for i in approval_items if i.get("status") == "pending")}</div><div class="l">待审批（显示范围）</div></div>' if approval_items is not None else '')
     kpis = f"""
     <div class="kpis">
+      {pending_kpi}
       <div class="kpi"><div class="n">{total}</div><div class="l">台账记录</div></div>
       <div class="kpi good"><div class="n">{ok_rate}</div><div class="l">记录成功率</div></div>
       <div class="kpi hot"><div class="n">{len(active)}</div><div class="l">已启用且未冷却</div></div>
@@ -344,6 +350,26 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
     recent_html = ''.join(
         f'<li>{esc((r.get("ts") or r.get("atUtc") or "")[:19])} · {esc(r.get("taskKey") or "unknown")} · {esc(r.get("status") or "unknown")}</li>'
         for r in flow_rows[:5]) or '<li class="dim">暂无派工流水</li>'
+    approved_status = {'pending': '待审批', 'approved': '已通过', 'rejected': '已拒绝'}
+    cards = []
+    for item in approval_items or []:
+        state = item.get('status', 'unknown')
+        actions = (f'<div class="approval-actions"><button type="button" data-approval="{esc(item.get("id"))}" data-decision="approved">通过</button>'
+                   f'<button type="button" data-approval="{esc(item.get("id"))}" data-decision="rejected">拒绝</button></div>') if state == 'pending' and approvals_actionable else ''
+        cards.append(f'<article class="approval-card"><h3>{esc(item.get("summary"))} '
+                     f'<span class="approval-{esc(state)}">{esc(approved_status.get(state, "未知"))}</span></h3>'
+                     f'<p>任务：{esc(item.get("taskKey"))} · 尝试：{esc(item.get("attemptId"))}</p>'
+                     f'<p>范围：{esc(item.get("scope"))}</p><p>验收：{esc(item.get("acceptance"))}</p>'
+                     f'<p>工作区：{esc(item.get("worktree"))}</p><p>执行器：{esc("、".join(str(x.get("executor")) + " / " + str(x.get("role")) + " / " + str(x.get("model")) for x in item.get("workers", []) if isinstance(x, dict)))}</p>'
+                     f'<p>创建：{esc(item.get("createdAt"))} · 决定：{esc(item.get("decidedAt") or "尚无")}</p>'
+                     f'<details><summary>查看完整任务简报与方案指纹</summary><pre>{esc(item.get("brief"))}</pre>'
+                     f'<p>方案文件：{esc(item.get("planPath"))}</p><p>简报文件：{esc(item.get("briefPath"))}</p>'
+                     f'<p>方案 SHA-256：{esc(item.get("planHash"))}</p><p>简报 SHA-256：{esc(item.get("briefHash"))}</p></details>{actions}</article>')
+    approval_cards = ''.join(cards) or '<div class="summary-card">暂无待审批任务</div>'
+    footer_note = ('本页读取本地状态；审批按钮会更新本机审批账本。' if approvals_actionable else '本页只读聚合本地状态。')
+    approval_section = (f'<section data-view="approvals"><h2>任务审批 <b>APPROVALS</b></h2>'
+                        f'<p class="dim">待审批优先显示，最多 200 项。按任务方案与简报审批，内容变化需重新审批；通过仅允许受管流程继续，不代表任务已完成。</p>'
+                        f'<div class="approval-list">{approval_cards}</div></section>') if approval_items is not None else ''
 
     return f"""<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>nuwax-crew 运行看板</title><style>{CSS}</style></head>
@@ -351,6 +377,7 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <header><h1>nuwax-crew <span class="tag">// 运行看板</span></h1>
 <div class="meta">生成于 {esc(generated_at)}<br>数据：executors.json · crew-usage.jsonl · crew-health.json · matrix.json</div></header>
 <div id="dashboard-content">
+{approval_section}
 <section data-view="overview"><h2>总览 <b>OVERVIEW</b></h2>{kpis}</section>
 <section data-view="overview"><div class="summary-grid">
 <div class="summary-card wide"><div class="chart-label">Activity · 7 days</div><h3>近七天派工活动</h3><p>以 UTC 当日为截止，按台账时间戳中的日期统计原始记录，包含派工和结果事件。</p><div class="trend" role="img" aria-label="近七天 Crew 台账记录数">{trend_html}</div></div>
@@ -377,13 +404,13 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <section data-view="dispatch"><h2>派工流水 <b>RECENT DISPATCHES</b>（最近 20 条）</h2>
 <table data-paginate="dispatch"><tr><th>时间</th><th>任务</th><th>执行器</th><th>角色</th><th>结果</th></tr>{flow_html}</table></section>
 <footer>regenerate：nuwax-forge dashboard --ledger &lt;crew-usage.jsonl&gt; --registry &lt;executors.json&gt; --out &lt;this.html&gt;<br>
-边界：本页只读聚合本地状态；不含密钥；由工作台按进度汇总周期重新生成。</footer>
+边界：{footer_note} 不含密钥；由工作台按进度汇总周期重新生成。</footer>
 </div></div></body></html>"""
 
 
-def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list, records=None, notes=None) -> str:
+def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list, records=None, notes=None, approval_items=None, approvals_actionable=False) -> str:
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
-    page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at, records=records, notes=notes)
+    page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at, records=records, notes=notes, approval_items=approval_items, approvals_actionable=approvals_actionable)
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(page, encoding="utf-8")

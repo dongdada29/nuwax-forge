@@ -85,15 +85,37 @@ def cmd_usage(args) -> int:
 
 def cmd_run(args) -> int:
     import json as _j
-    plan = _j.loads(open(args.plan, encoding="utf-8").read())
+    from pathlib import Path
+    plan_bytes = Path(args.plan).read_bytes()
+    plan = _j.loads(plan_bytes)
     brief = args.brief
     input_files = [args.plan]
     if brief.startswith("@"):
-        from pathlib import Path
         if Path(brief[1:]).stat().st_size > 1048576:
             raise ValueError("brief 文件超过 1MiB 输入上限")
         input_files.append(brief[1:])
-        brief = open(brief[1:], encoding="utf-8").read()
+        brief_bytes = Path(brief[1:]).read_bytes()
+        brief = brief_bytes.decode('utf-8')
+    # The configured workbench's canonical ledger carries a local policy marker.
+    # An ordinary crew run against that ledger must not silently omit the gate.
+    policy_file = Path(args.ledger).resolve().parent / 'runtime' / 'approval-policy.json'
+    if policy_file.exists() or policy_file.is_symlink():
+        if policy_file.is_symlink() or not policy_file.is_file() or policy_file.stat().st_size > 4096:
+            raise ValueError('approval-policy-invalid')
+        policy = _j.loads(policy_file.read_text(encoding='utf-8'))
+        if not isinstance(policy, dict) or policy.get('required') is not True:
+            raise ValueError('approval-policy-invalid')
+        expected_store = policy_file.parent / 'approvals.sqlite'
+        if not args.approval_db or not args.approval_id or Path(args.approval_db).resolve() != expected_store.resolve():
+            raise ValueError('human-approval-required-for-workbench-ledger')
+    if bool(args.approval_db) != bool(args.approval_id):
+        raise ValueError('approval-db 与 approval-id 必须一起指定')
+    if args.approval_db:
+        if not args.brief.startswith('@'):
+            raise ValueError('审批任务必须使用文件形式的 brief')
+        from . import approvals
+        approvals.verify(args.approval_db, args.approval_id, task=plan.get('taskKey'), attempt=plan.get('attemptId'),
+                         worktree=args.worktree, plan=args.plan, brief=args.brief[1:], plan_bytes=plan_bytes, brief_bytes=brief_bytes)
     out = runner.run_plan(plan, worktree=args.worktree, brief=brief, ledger_path=args.ledger,
                           artifacts_dir=args.artifacts, timeout=args.timeout,
                           only_roles=set(args.role.split(",")) if args.role else None, input_files=input_files)
@@ -110,7 +132,7 @@ def cmd_dashboard(args) -> int:
     health_data = json.loads(h.read_text(encoding="utf-8")) if h and h.exists() else {}
     m = Path(args.matrix) if args.matrix else None
     matrix = json.loads(m.read_text(encoding="utf-8")) if m and m.exists() else []
-    inputs = [Path(x).resolve() for x in (args.ledger, args.registry, args.health, args.matrix, args.task_store, args.host_budget) if x]
+    inputs = [Path(x).resolve() for x in (args.ledger, args.registry, args.health, args.matrix, args.task_store, args.host_budget, args.approval_store) if x]
     agent_dirs = {Path(args.agent_state).resolve(strict=True)} if args.agent_state else set()
     if args.agent_state_root:
         root = Path(args.agent_state_root).resolve(strict=True)
@@ -141,8 +163,11 @@ def cmd_dashboard(args) -> int:
         record = unified_dashboard.agent_state_record(directory)
         if record is not None:
             records.append(record)
+    from . import approvals
+    approval_items = approvals.list_requests(args.approval_store) if args.approval_store else None
     out = dashboard.write_dashboard(args.out, usage=data, registry=reg, health=health_data,
-                                    matrix=matrix, flow_rows=flow_rows, records=records, notes=notes)
+                                    matrix=matrix, flow_rows=flow_rows, records=records, notes=notes,
+                                    approval_items=approval_items, approvals_actionable=bool(args.serve and args.approval_store))
     print(out)
     return 0
 
@@ -151,8 +176,10 @@ def cmd_dashboard_server(args) -> int:
     """Explicit foreground server; regenerate only on local requests."""
     import contextlib
     import copy
+    import hashlib
     import html
     import io
+    import secrets
     import tempfile
     import threading
     from datetime import datetime
@@ -163,6 +190,9 @@ def cmd_dashboard_server(args) -> int:
         raise ValueError('--serve 不接受 --out')
     if not 0 <= args.port <= 65535 or not 5 <= args.refresh_seconds <= 3600:
         raise ValueError('port 必须为 0..65535，refresh-seconds 必须为 5..3600')
+    if args.approval_store and not Path(args.approval_store).is_absolute():
+        raise ValueError('approval-store 必须是绝对路径')
+    csrf = secrets.token_urlsafe(32)
     with tempfile.TemporaryDirectory(prefix='nuwax-dashboard-') as temp:
         snapshot = copy.copy(args)
         snapshot.out = str(Path(temp) / 'dashboard.html')
@@ -181,13 +211,17 @@ def cmd_dashboard_server(args) -> int:
                         f'<button type="button" id="refresh-now">立即刷新</button>'
                         f'<span id="refresh-status" role="status">自动刷新：每 {args.refresh_seconds} 秒</span>'
                         f'<span id="source-time">派工台账最后写入：{source_time}</span></div>'
-                        '<nav class="view-nav" aria-label="看板视图">'
+                        '<nav class="view-nav" aria-label="看板视图">' +
+                        ('<button type="button" data-target="approvals">任务审批</button>' if args.approval_store else '') +
                         '<button type="button" data-target="overview">运行总览</button>'
                         '<button type="button" data-target="routes">路由关系</button>'
                         '<button type="button" data-target="tasks">任务详情</button>'
                         '<button type="button" data-target="models">模型与执行器</button>'
                         '<button type="button" data-target="dispatch">派工流水</button></nav>')
-            page = page.replace('<div id="dashboard-content">', controls + '<div id="dashboard-content">', 1)
+            marker = '<div id="dashboard-content">'
+            content_hash = hashlib.sha256(page[page.index(marker):].encode('utf-8')).hexdigest()
+            page = page.replace(marker, controls + f'<div id="dashboard-content" data-content-hash="{content_hash}">', 1)
+            page = page.replace('</head>', f'<meta name="forge-csrf" content="{csrf}"></head>', 1)
             return page.replace('</body>', '<script src="/live.js" defer></script></body>', 1).encode('utf-8')
 
         live_script = '''(() => {
@@ -197,6 +231,7 @@ def cmd_dashboard_server(args) -> int:
   const interval = Number(controls.dataset.interval);
   let busy = false;
   let view = 'overview';
+  let contentHash = document.querySelector('#dashboard-content').dataset.contentHash;
   const pages = {};
   function renderView() {
     document.querySelectorAll('.view-nav button').forEach(button => {
@@ -241,16 +276,32 @@ def cmd_dashboard_server(args) -> int:
       const meta = next.querySelector('.meta');
       const source = next.querySelector('#source-time');
       if (!content || !meta || !source) throw new Error('invalid response');
-      document.querySelector('#dashboard-content').innerHTML = content.innerHTML;
+      if (content.dataset.contentHash !== contentHash) {
+        document.querySelector('#dashboard-content').innerHTML = content.innerHTML;
+        contentHash = content.dataset.contentHash;
+        renderView();
+      }
       document.querySelector('.meta').innerHTML = meta.innerHTML;
       document.querySelector('#source-time').textContent = source.textContent;
-      renderView();
       status.textContent = '已更新 ' + new Date().toLocaleTimeString() + ' · 每 ' + interval + ' 秒自动刷新';
     } catch (_) {
       status.textContent = '刷新失败，保留上次数据；将自动重试';
     } finally { clearTimeout(timeout); busy = false; button.disabled = false; }
   }
   button.addEventListener('click', refresh);
+  document.addEventListener('click', async event => {
+    const action = event.target.closest('button[data-approval][data-decision]');
+    if (!action || action.disabled) return;
+    action.disabled = true;
+    try {
+      const response = await fetch('/api/approvals/decision', {method:'POST', headers:{'Content-Type':'application/json',
+        'X-Forge-CSRF':document.querySelector('meta[name="forge-csrf"]').content},
+        body:JSON.stringify({id:action.dataset.approval, decision:action.dataset.decision})});
+      if (!response.ok) throw new Error('decision failed');
+      await refresh();
+    } catch (_) { status.textContent = '审批提交失败，请刷新后重试'; }
+    finally { action.disabled = false; }
+  });
   setInterval(refresh, interval * 1000);
 })();'''.encode('utf-8')
 
@@ -258,6 +309,9 @@ def cmd_dashboard_server(args) -> int:
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
+                if self.headers.get('Host') != f'127.0.0.1:{self.server.server_port}':
+                    self.send_error(403)
+                    return
                 if self.path not in ('/', '/index.html', '/live.js'):
                     self.send_error(404)
                     return
@@ -274,6 +328,33 @@ def cmd_dashboard_server(args) -> int:
                 self.send_header('Content-Length', str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
+
+            def do_POST(self):
+                origin = f'http://127.0.0.1:{self.server.server_port}'
+                if (not args.approval_store or self.path != '/api/approvals/decision'
+                    or self.headers.get('Host') != origin.removeprefix('http://')
+                    or self.headers.get('Origin') != origin
+                    or self.headers.get('X-Forge-CSRF') != csrf
+                    or self.headers.get('Content-Type') != 'application/json'):
+                    self.send_error(403)
+                    return
+                try:
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if length < 1 or length > 2048: raise ValueError('invalid-length')
+                    data = json.loads(self.rfile.read(length))
+                    if not isinstance(data, dict) or set(data) != {'id', 'decision'}: raise ValueError('invalid-body')
+                    from . import approvals
+                    result = approvals.decide(args.approval_store, data['id'], data['decision'])
+                    body = json.dumps(result).encode()
+                except (ValueError, OSError, sqlite3.Error):
+                    self.send_error(400, 'Approval decision rejected')
+                    return
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json; charset=utf-8')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
 
             def log_message(self, *_args):
                 pass
@@ -341,6 +422,8 @@ def main(argv=None) -> int:
     p.add_argument("--artifacts", required=True, help="输出日志目录")
     p.add_argument("--timeout", type=int, default=900)
     p.add_argument("--role", default=None, help="只执行指定角色，逗号分隔")
+    p.add_argument("--approval-db", default=None, help="已授权工作台的审批账本")
+    p.add_argument("--approval-id", default=None, help="批准的方案标识")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("dashboard", help="生成自包含运行看板 HTML")
@@ -352,6 +435,7 @@ def main(argv=None) -> int:
     p.add_argument("--agent-state", default=None, help="Forge agent 单次运行 state 目录，只读")
     p.add_argument("--agent-state-root", default=None, help="包含多次 agent state 的目录，只读一层")
     p.add_argument("--host-budget", default=None, help="Codex budget guard JSON 快照，只读")
+    p.add_argument("--approval-store", default=None, help="显式审批账本，--serve 时允许本机审批")
     p.add_argument("--out")
     p.add_argument("--serve", action="store_true", help="前台监听本机并按访问刷新")
     p.add_argument("--port", type=int, default=0)

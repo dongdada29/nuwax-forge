@@ -268,6 +268,31 @@ def dispatch(profile, request, directory):
               'cwd': config['devkitCrewRoot'], 'env': {'NUWAX_DEVKIT_NODE': config['tools']['node']['path'], 'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONPATH': config['devkitCrewRoot']},
               'argv': [config['tools']['python']['path'], '-B', '-m', 'crew', 'run', '--plan', str(plan_path), '--worktree', str(worktree), '--brief', '@' + str(brief), '--ledger', config['crewLedger'], '--artifacts', str(Path(profile['workspace']['artifactsDirectory']) / 'dispatch'), '--timeout', str(timeout)],
               'planHash': sha_file(plan_path), 'briefHash': sha_file(brief), 'providerHardCap': False}
+    if config.get('humanApprovalRequired') is True:
+        if plan.get('attemptId') != attempt:
+            raise ValueError('approval-requires-matching-plan-attemptId')
+        info = request.get('approval')
+        if not isinstance(info, dict) or set(info) != {'summary', 'scope', 'acceptance'}:
+            raise ValueError('approval-summary-scope-acceptance-required')
+        store = Path(directory).resolve() / 'approvals.sqlite'
+        sys.path.insert(0, config['devkitCrewRoot'])
+        from crew import approvals
+        brief_bytes = brief.read_bytes()
+        if hashlib.sha256(brief_bytes).hexdigest() != result['briefHash']:
+            raise ValueError('approval-brief-changed-during-read')
+        payload = {'taskKey': task, 'attemptId': attempt, 'summary': info['summary'], 'scope': info['scope'],
+                   'acceptance': info['acceptance'], 'worktree': str(worktree), 'planHash': result['planHash'],
+                   'briefHash': result['briefHash'], 'brief': brief_bytes.decode('utf-8'),
+                   'planPath': str(plan_path), 'briefPath': str(brief),
+                   'workers': [{'executor': str(a.get('executor', 'unknown'))[:128], 'role': str(a.get('role', 'unknown'))[:128],
+                                'model': str(a.get('model') or plan.get('model') or '未声明')[:150]} for a in plan['assignments'][:20]]}
+        item = approvals.submit(store, payload)
+        if item['status'] != 'approved':
+            return {'schemaVersion': 1, 'taskKey': task, 'attemptId': attempt, 'status': 'approval-' + item['status'],
+                    'approvalId': item['id'], 'executeAllowed': False}
+        approvals.verify(store, item['id'], task=task, attempt=attempt, worktree=worktree, plan=plan_path, brief=brief)
+        result['approvalId'] = item['id']
+        result['argv'].extend(['--approval-db', str(store), '--approval-id', item['id']])
     with locked(directory) as d:
         p = d / 'dispatch-index.json'
         index = load(p) if p.exists() else {}
