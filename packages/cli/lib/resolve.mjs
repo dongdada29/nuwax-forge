@@ -38,6 +38,7 @@ export function resolvePackage(name) {
 export const PACKAGE_ARTIFACTS = {
   '@nuwax-ai/devkit-stack': root => join(root, 'skills', 'nuwax-stack', 'scripts', 'run_verification.py'),
   '@nuwax-ai/devkit-crew': root => join(root, 'crew', '__init__.py'),
+  '@nuwax-ai/devkit-dashboard': root => join(root, 'forge_dashboard', '__init__.py'),
   '@nuwax-ai/nuwa-sdlc-kit': root => join(root, 'kit', 'engine', 'verify.mjs'),
   '@nuwax-ai/devkit-contracts': root => join(root, 'schemas', 'verification-v1.schema.json'),
 };

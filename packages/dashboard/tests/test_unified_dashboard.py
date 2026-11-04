@@ -14,10 +14,28 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from crew import unified_dashboard as u
+sys.path.insert(0, str(ROOT.parent / "nuwax-crew"))
+from forge_dashboard import sources as u
+from forge_dashboard.adapters import AdapterRegistry, default_adapters
+from forge_dashboard.cli import LoopbackServer
+from unittest.mock import patch
+from http.server import BaseHTTPRequestHandler
 
 
 class UnifiedDashboardTests(unittest.TestCase):
+    def test_loopback_server_does_not_require_reverse_dns(self):
+        with patch('socket.getfqdn', side_effect=AssertionError('reverse DNS must not be called')):
+            with LoopbackServer(('127.0.0.1', 0), BaseHTTPRequestHandler) as server:
+                self.assertEqual(server.server_name, '127.0.0.1')
+                self.assertGreater(server.server_port, 0)
+
+    def test_explicit_source_adapters_can_extend_without_auto_loading(self):
+        adapters = default_adapters()
+        adapters.register('fixture', lambda value: [{'source':'fixture', 'taskKey':value}])
+        self.assertEqual(adapters.read('fixture', 'task'), [{'source':'fixture', 'taskKey':'task'}])
+        with self.assertRaises(ValueError): adapters.register('crew', lambda value: value)
+        with self.assertRaises(ValueError): adapters.read('missing', None)
+
     def test_deduplicates_attempt_events_and_keeps_zero_and_unknown(self):
         base = {'taskKey': 'task', 'attemptId': 'a', 'executor': 'codex', 'role': 'worker'}
         records = u.crew_records([
@@ -69,7 +87,8 @@ class UnifiedDashboardTests(unittest.TestCase):
             root = Path(td)
             module = root / 'node_modules' / '@nuwax-ai' / 'devkit-crew'
             module.parent.mkdir(parents=True)
-            module.symlink_to(ROOT, target_is_directory=True)
+            module.symlink_to(ROOT.parent / 'nuwax-crew', target_is_directory=True)
+            (module.parent / 'devkit-dashboard').symlink_to(ROOT, target_is_directory=True)
             (module.parent / 'devkit-contracts').symlink_to(ROOT.parent / 'contracts', target_is_directory=True)
             shutil.copytree(ROOT.parent / 'cli', root / 'cli')
             registry = root / 'registry.json'

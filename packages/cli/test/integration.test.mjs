@@ -1,5 +1,5 @@
 // 集成测试：临时 Git 消费者（含空格路径）→ kit opt-in 接线 → verify fresh/reuse/tamper。
-// 只用本安装的 5 包与系统 git/python/node；无外部账号、无网络、无模型。
+// 只用本安装的 6 包与系统 git/python/node；无外部账号、无网络、无模型。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';

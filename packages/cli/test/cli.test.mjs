@@ -42,14 +42,14 @@ test('未知命令/未知 flag/缺值参数一律拒绝且非 0', async () => {
 test('doctor：monorepo 安装下通过，--json 结构完整', async () => {
   const text = await run(['doctor']);
   assert.equal(text.code, 0);
-  for (const name of ['@nuwax-ai/devkit-stack', '@nuwax-ai/devkit-crew', '@nuwax-ai/nuwa-sdlc-kit', '@nuwax-ai/devkit-contracts']) {
+  for (const name of ['@nuwax-ai/devkit-stack', '@nuwax-ai/devkit-crew', '@nuwax-ai/devkit-dashboard', '@nuwax-ai/nuwa-sdlc-kit', '@nuwax-ai/devkit-contracts']) {
     assert.ok(text.stdout.includes(name), name);
   }
   const jsonRun = await run(['doctor', '--json']);
   assert.equal(jsonRun.code, 0);
   const report = JSON.parse(jsonRun.stdout);
   assert.equal(report.ok, true);
-  assert.equal(report.checks.filter(c => c.check.startsWith('package:')).length, 5);
+  assert.equal(report.checks.filter(c => c.check.startsWith('package:')).length, 6);
 });
 
 test('doctor：包不可解析（缺依赖）时非 0 且给出清晰诊断', async () => {

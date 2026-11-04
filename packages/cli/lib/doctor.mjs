@@ -33,7 +33,7 @@ export async function runDoctor({ json = false } = {}) {
     checks.push({ check: 'python', ok: true, found: pythonCheck.version, bin: pythonCheck.bin, need: `>=${MIN_PYTHON.join('.')}` });
   }
 
-  const packages = ['@nuwax-ai/devkit-stack', '@nuwax-ai/devkit-crew', '@nuwax-ai/nuwa-sdlc-kit', '@nuwax-ai/devkit-contracts'];
+  const packages = ['@nuwax-ai/devkit-stack', '@nuwax-ai/devkit-crew', '@nuwax-ai/devkit-dashboard', '@nuwax-ai/nuwa-sdlc-kit', '@nuwax-ai/devkit-contracts'];
   const packageResults = {};
   for (const name of packages) {
     const result = locate(name);

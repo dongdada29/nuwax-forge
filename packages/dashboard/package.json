@@ -1,0 +1,22 @@
+{
+  "name": "@nuwax-ai/devkit-dashboard",
+  "version": "0.1.0-devkit-local.1",
+  "private": true,
+  "description": "Nuwax Forge 本地运行看板与 Web 客户端",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "README.md",
+    "forge_dashboard/",
+    "web/",
+    "tests/"
+  ],
+  "dependencies": {
+    "@nuwax-ai/devkit-crew": "0.1.0-devkit-local.1"
+  },
+  "scripts": {
+    "test": "python3 -B -m unittest discover -s tests -v"
+  }
+}

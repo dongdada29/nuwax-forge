@@ -42,7 +42,7 @@ function nuwax(hostRoot, format = 'nested') {
 function checkedDoctor(installed, skill) {
   const d = run(path.join(skill, 'scripts', 'forge.mjs'), ['doctor', '--json']);
   assert.equal(d.ok, true); assert.equal(d.problems.length, 0);
-  assert.equal(d.checks.filter(c => c.check.startsWith('package:')).length, 5);
+  assert.equal(d.checks.filter(c => c.check.startsWith('package:')).length, 6);
   for (const c of d.checks) { assert.equal(c.ok, true); if (c.artifact) assert.ok(c.artifact.startsWith(installed.release + path.sep), c.artifact); }
   return d;
 }
@@ -52,7 +52,7 @@ try {
     const build = run(path.join(source, 'scripts', 'build-bundle.mjs'), ['--out', bundle]);
     const m = verifyBundle(bundle); assert.equal(m.version, build.versions['@nuwax-ai/devkit-cli']);
     const files = fileMap(bundle); delete files['manifest.json']; assert.deepEqual(files, m.files);
-    assert.equal(Object.keys(m.packages).length, 5);
+    assert.equal(Object.keys(m.packages).length, 6);
     assert.ok(!Object.keys(files).some(f => f.includes('node_modules/') || f.includes('__pycache__') || f.includes('/test/') || f.includes('/tests/') || f.startsWith('payload/') && f.includes('/docs/')));
     for (const rel of Object.keys(files)) {
       const data = fs.readFileSync(path.join(bundle, rel));

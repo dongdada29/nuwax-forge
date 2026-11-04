@@ -6,8 +6,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT.parent / "nuwax-crew"))
 
-from crew import dashboard, usage  # noqa: E402
+from forge_dashboard import views as dashboard
+from crew import usage  # noqa: E402
 
 REG = {"executors": [
     {"name": "codex", "tier": "S", "subscription": "Codex PRO", "costClass": "subscription", "verified": True, "dailyCap": 40},

@@ -30,6 +30,7 @@ const runtime = {
   cli: ['bin/nuwax-forge.mjs', 'bin/nuwax-devkit.mjs', 'lib/'],
   contracts: ['schemas/', 'gui/'],
   'nuwax-crew': ['crew/'],
+  dashboard: ['forge_dashboard/', 'web/'],
   'nuwax-stack': ['modules/stack/', 'skills/nuwax-stack/scripts/run_verification.py', 'skills/nuwax-stack/scripts/task_state.py', 'skills/nuwax-stack/scripts/verification.py'],
   'nuwa-sdlc-kit': ['cli.mjs', 'kit/'],
 };
