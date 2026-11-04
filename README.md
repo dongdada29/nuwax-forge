@@ -18,6 +18,7 @@ v3.0.26 修复场景实跑发现了环境变化后仍复用旧通过结论的问
 | 包（packages/） | npm 名 | 角色 |
 |---|---|---|
 | nuwax-stack | `@nuwax-ai/devkit-stack` | 任务状态、恢复、验收证据（Python skill 资源，含 scripts） |
+| dashboard | `@nuwax-ai/devkit-dashboard` | 本地看板服务、数据适配器与 Web 客户端 |
 | nuwax-crew | `@nuwax-ai/devkit-crew` | 有限调用路由与执行验收（Python 标准库） |
 | nuwa-sdlc-kit | `@nuwax-ai/nuwa-sdlc-kit`（保留原名） | 仓内规则层 + 固定配方运行器（kit/VERSION 1.5.0） |
 | contracts | `@nuwax-ai/devkit-contracts` | verification-v1 正本 schema、level 边界、GUI 合成 fixture 校验器 |
@@ -25,7 +26,7 @@ v3.0.26 修复场景实跑发现了环境变化后仍复用旧通过结论的问
 
 要求：**Node >= 22，Python >= 3.10（标准库）**；npm 分发只携带 Python 源码，运行仍需本机 Python。
 零外部依赖，无 Nx/Turbo/TS 构建。版本策略统一为 `X.Y.Z-devkit-local.N` 本地预发布；
-CLI 对 4 个兄弟包用**精确同版本**依赖（workspace 内本地链接，tarball 消费者离线可装）。
+CLI 对 5 个兄弟包用**精确同版本**依赖（workspace 内本地链接，tarball 消费者离线可装）。
 
 ## 快速开始（真实命令）
 
@@ -33,17 +34,17 @@ CLI 对 4 个兄弟包用**精确同版本**依赖（workspace 内本地链接�
 
 ```sh
 cd nuwax-forge # 新 clone 目录；已有 checkout 继续使用原目录
-npm install --ignore-scripts --offline --no-audit --no-fund   # 已验证：5 包本地链接
+npm install --ignore-scripts --offline --no-audit --no-fund   # 已验证：6 包本地链接
 npm test                                                      # 全部工作区测试
 npm run contracts:check                                       # 契约正本 ↔ stack 副本字节一致
-npm run pack                                                  # 5 个 tarball 到新的仓外临时目录；--out 需选未使用目录
+npm run pack                                                  # 6 个 tarball 到新的仓外临时目录；--out 需选未使用目录
 ```
 
 CLI（帮助 / 体检 / 接线 / 验收）：
 
 ```sh
 node packages/cli/bin/nuwax-forge.mjs help
-node packages/cli/bin/nuwax-forge.mjs doctor            # Node/Python 版本 + 5 包绑定；--json 输出 JSON
+node packages/cli/bin/nuwax-forge.mjs doctor            # Node/Python 版本 + 6 包绑定；--json 输出 JSON
 node packages/cli/bin/nuwax-forge.mjs init --project <外部项目> --recipe <仓内相对配方路径>
 node packages/cli/bin/nuwax-forge.mjs client-verify --project <client项目> --state <仓外状态目录>
 node packages/cli/bin/nuwax-forge.mjs verify --project <外部项目> --state <仓外状态目录> \

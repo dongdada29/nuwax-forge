@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// 打包 5 个工作区包为 tarball 到可指定的仓外目录，并核对 tarball 内容边界：
+// 打包 6 个工作区包为 tarball 到可指定的仓外目录，并核对 tarball 内容边界：
 // 无真实 registry、无凭据、无 .git 历史、无 node_modules；**拒绝一切符号链接**
 // （tar -tvf 元数据可见 `entry -> target`，链接本身即拒绝，无论目标相对或绝对）。
 // out 目录做 canonical 仓外校验（最近存在祖先 realpath）；npm pack 带 --ignore-scripts --offline；
-// 只认本轮产物（mtime>=启动时刻的 5 个期望文件名），不把目录里已有的旧 tgz 冒充本轮结果。
+// 只认本轮产物（mtime>=启动时刻的 6 个期望文件名），不把目录里已有的旧 tgz 冒充本轮结果。
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -14,10 +14,10 @@ import { realpathNearestExisting, isInside } from '../packages/cli/lib/paths.mjs
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const START = Date.now();
-// 期望的 5 个 tarball 名（由各包 name+version 派生，不硬编码版本号）
+// 期望的 6 个 tarball 名（由各包 name+version 派生，不硬编码版本号）
 function expectedTarballs() {
   const names = [];
-  for (const dir of ['cli', 'contracts', 'nuwax-crew', 'nuwax-stack']) {
+  for (const dir of ['cli', 'contracts', 'dashboard', 'nuwax-crew', 'nuwax-stack']) {
     const pkg = JSON.parse(readFileSync(path.join(ROOT, 'packages', dir, 'package.json'), 'utf8'));
     names.push(`${pkg.name.replace('@', '').replace('/', '-')}-${pkg.version}.tgz`);
   }
@@ -99,9 +99,9 @@ for (const name of expected) {
   }
   console.log(`ok ${name}  ${(stat.size / 1024).toFixed(1)} KiB  sha256=${sha.slice(0, 12)}  entries=${lines.length}`);
 }
-if (produced.filter(Boolean).length !== 5) {
-  console.error(`FAIL 期望 5 个本轮 tarball，实际 ${produced.length}`);
+if (produced.filter(Boolean).length !== 6) {
+  console.error(`FAIL 期望 6 个本轮 tarball，实际 ${produced.length}`);
   failed = true;
 }
 if (failed) process.exit(1);
-console.log(`\n5 个 tarball 已产出并核对：${out}`);
+console.log(`\n6 个 tarball 已产出并核对：${out}`);

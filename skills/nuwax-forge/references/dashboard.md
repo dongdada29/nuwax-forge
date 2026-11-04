@@ -35,3 +35,5 @@ node "$ENTRY" dashboard --ledger "$CREW_LEDGER" --registry "$CREW_REGISTRY" --ou
 - 未知 token 或调用数显示 `unknown`；真实 0 保留为 0。已知 token 是部分合计；跨来源可能表示同一次运行，**不能直接相加**。来源不全、授权未确认、快照不完整或缺失时，说明覆盖范围，不宣称总量、最终封账或预算通过。
 
 静态 HTML 需要显式重新生成。是否发布、分享或修改平台/安装配置仍取决于用户已授权的范围。
+
+看板实现位于独立的 `packages/dashboard`，`web/` 是可复用客户端资源，本地服务保留 loopback 边界；数据源通过显式适配器注册，不自动加载外部代码。当前未实现 Electron 客户端或将 DSH 的插件界面嵌入看板。

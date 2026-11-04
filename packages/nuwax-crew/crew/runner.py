@@ -17,7 +17,7 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import ledger, unified_dashboard
+from . import ledger, delivery
 from .execution_budget import ExecutionBudget, command_metadata, model_assignment
 
 
@@ -39,7 +39,7 @@ def _read_delivery(step_root: Path) -> dict:
         if len(raw) > 16384:
             return {}
         data = json.loads(raw.decode('utf-8'))
-        return unified_dashboard.delivery_fields(data)
+        return delivery.delivery_fields(data)
     except (OSError, ValueError, UnicodeError):
         return {}
 

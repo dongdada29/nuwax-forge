@@ -27,7 +27,7 @@ export async function runInit({ project, recipe }) {
   const recipeFile = join(projectDir, recipe);
 
   const kit = resolvePackage('@nuwax-ai/nuwa-sdlc-kit');
-  if (!kit) throw new Error('未找到 @nuwax-ai/nuwa-sdlc-kit（先安装 5 个 devkit 包，或运行 nuwax-forge doctor）');
+  if (!kit) throw new Error('未找到 @nuwax-ai/nuwa-sdlc-kit（先安装 6 个 devkit 包，或运行 nuwax-forge doctor）');
   const kitCli = join(kit.root, 'cli.mjs');
   if (!existsSync(kitCli)) throw new Error(`kit CLI 缺失: ${kitCli}`);
 

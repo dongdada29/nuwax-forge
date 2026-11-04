@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 全新 tmp 消费者冒烟：同时安装 5 个 tgz（离线、ignore-scripts），用**已安装**的
+// 全新 tmp 消费者冒烟：同时安装 6 个 tgz（离线、ignore-scripts），用**已安装**的
 // nuwax-devkit bin 跑 help / doctor / fixture init+verify。不依赖 monorepo 源码或旧试点路径。
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -10,7 +10,7 @@ const argv = process.argv.slice(2);
 let tarballs = argv[0] ?? '/tmp/nuwax-devkit-tarballs';
 if (argv[0] === '--tarballs') tarballs = argv[1];
 const tgz = [];
-for (const name of ['cli', 'contracts', 'crew', 'stack']) tgz.push(path.join(tarballs, `nuwax-ai-devkit-${name}-0.1.0-devkit-local.1.tgz`));
+for (const name of ['cli', 'contracts', 'crew', 'dashboard', 'stack']) tgz.push(path.join(tarballs, `nuwax-ai-devkit-${name}-0.1.0-devkit-local.1.tgz`));
 tgz.push(path.join(tarballs, 'nuwax-ai-nuwa-sdlc-kit-1.5.0-devkit-local.1.tgz'));
 for (const file of tgz) if (!existsSync(file)) { console.error(`FAIL 缺 tarball: ${file}（先 npm run pack -- --out ${tarballs}）`); process.exit(1); }
 
@@ -30,10 +30,10 @@ const run = (cmd, args, opts = {}) => {
 };
 const fail = step => { console.error(`FAIL ${step}`); rmSync(work, { recursive: true, force: true }); process.exit(1); };
 
-// 1) 离线安装 5 tgz
+// 1) 离线安装 6 tgz
 const install = run('npm', ['install', '--ignore-scripts', '--offline', '--no-audit', '--no-fund', ...tgz], { cwd: work });
-if (install.code !== 0) { console.error(install.out); fail('npm install 5 tgz'); }
-console.log('ok npm install --ignore-scripts --offline（5 tgz）');
+if (install.code !== 0) { console.error(install.out); fail('npm install 6 tgz'); }
+console.log('ok npm install --ignore-scripts --offline（6 tgz）');
 
 const bin = path.join(work, 'node_modules', '.bin', 'nuwax-devkit');
 if (!existsSync(bin)) fail('bin nuwax-devkit 未生成');
@@ -46,7 +46,17 @@ console.log('ok nuwax-devkit help');
 // 3) 已安装 CLI：doctor
 const doctor = run(bin, ['doctor']);
 if (doctor.code !== 0 || !doctor.out.includes('全部检查通过')) { console.error(doctor.out); fail('doctor'); }
-console.log('ok nuwax-devkit doctor（Node/Python/5 包绑定）');
+console.log('ok nuwax-devkit doctor（Node/Python/6 包绑定）');
+
+// 验证独立 Dashboard 包与 Web 资源在真实 tarball 安装中可用。
+const ledger = path.join(work, 'ledger.jsonl');
+const registry = path.join(work, 'registry.json');
+const board = path.join(work, 'board.html');
+writeFileSync(ledger, '');
+writeFileSync(registry, JSON.stringify({ executors: [] }));
+const dashboard = run(bin, ['dashboard', '--ledger', ledger, '--registry', registry, '--out', board]);
+if (dashboard.code !== 0 || !readFileSync(board, 'utf8').includes('已登记引擎')) { console.error(dashboard.out); fail('installed dashboard'); }
+console.log('ok 已安装 dashboard 与 Web 资源');
 
 // 4) git 消费者 + fixture init/verify
 for (const args of [['init', '-q', project], ['-C', project, 'add', '.'], ['-C', project, '-c', 'user.name=Smoke', '-c', 'user.email=smoke@example.invalid', 'commit', '-qm', 'smoke']]) {
@@ -64,4 +74,4 @@ if (parsed.passed !== true || parsed.internalModelRequests !== 0) fail('verify �
 console.log(`ok nuwax-devkit verify（passed=true, reused=${parsed.reused}, internalModelRequests=0）`);
 
 rmSync(work, { recursive: true, force: true });
-console.log('\n消费者冒烟通过：全新 tmp 安装 5 tgz → help/doctor/fixture init+verify 全部真实执行');
+console.log('\n消费者冒烟通过：全新 tmp 安装 6 tgz → help/doctor/fixture init+verify 全部真实执行');

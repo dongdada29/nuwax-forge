@@ -5,7 +5,7 @@
 
 ```sh
 nuwax-forge help
-nuwax-forge doctor [--json]     # Node>=22 / Python>=3.10 / 5 包绑定；问题非 0 退出；不联网不改全局
+nuwax-forge doctor [--json]     # Node>=22 / Python>=3.10 / 6 包绑定；问题非 0 退出；不联网不改全局
 nuwax-forge init --project <外部项目> --recipe <仓内相对配方路径>
 nuwax-forge verify --project <外部项目> --state <仓外状态目录> --task-key <任务键> \
   [--node <可信node绝对路径>] [--python <python解释器>] [--reuse]

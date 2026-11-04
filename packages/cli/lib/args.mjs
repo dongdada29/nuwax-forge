@@ -6,6 +6,7 @@ export const USAGE = `用法：
   nuwax-forge stack runtime --command <check|lease|context|backoff|dispatch|record> --profile <profile.json> [--input <JSON>]
   nuwax-forge stack task-state --command <trigger-record|trigger-read|ticket-admit|ticket-read|assignment-prepare|assignment-start|assignment-report|assignment-finish> --input <JSON 文件>
   nuwax-forge help
+  nuwax-forge dsh-plugin <add|remove|inspect|run> --profile <DSH profile> [--package <npm包或路径>] [--binary <dsh>]
   nuwax-forge dashboard --ledger <JSONL> --registry <JSON> (--out <HTML> | --serve) [--port <0..65535>] [--refresh-seconds <5..3600>] [--health <JSON>] [--matrix <JSON>] [--task-store <tasks.sqlite>] [--agent-state <state目录>] [--agent-state-root <目录>] [--host-budget <guard.json>] [--approval-store <approvals.sqlite>] [--python <解释器>]
   nuwax-forge doctor [--json]
   nuwax-forge agent doctor --runtime <codex|deepseek-harness> [--binary <可信绝对路径>] --json
@@ -32,7 +33,8 @@ export const USAGE = `用法：
 
 说明：
   dashboard  从显式本地数据生成 HTML；--serve 前台只监听 127.0.0.1，页面按访问读取最新数据；未知实耗单列。
-  doctor  检查 Node>=22 / Python>=3.10 与 5 个包绑定，不联网、不改全局；有问题退出非 0。
+  dsh-plugin  委托已安装的 DSH 宿主管理/运行插件；插件仍在 DSH 中运行，不注入 Forge 进程。
+  doctor  检查 Node>=22 / Python>=3.10 与 6 个包绑定，不联网、不改全局；有问题退出非 0。
   init    显式 opt-in：调用 nuwa-sdlc-kit verify:init 接线 verification，保留既有 hook/profile。
   verify  调用本包 stack 的 run_verification.py（crew-root 为同安装的 @nuwax-ai/devkit-crew）。
           state 强制在项目仓之外。桥接 JSON 透传；进程 exit 0 不等于产品验收通过。
