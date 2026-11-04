@@ -26,6 +26,10 @@ export function readBoundedJson(file, label = 'JSON') {
 // 不扫描项目，只读取显式白名单中的普通文本文件。每个文件先 stat，再按剩余字节上限读。
 export function contextManifest({ brief = '', context = {}, worktree, command = null, inputs = [] } = {}) {
   if (!context || typeof context !== 'object' || Array.isArray(context)) throw new BudgetDataError('context 必须是对象');
+  const runtimeContextTokens = context.runtimeContextTokens;
+  if (runtimeContextTokens !== undefined && (!Number.isSafeInteger(runtimeContextTokens) || runtimeContextTokens < 0 || runtimeContextTokens > 10000000)) {
+    throw new BudgetDataError('context.runtimeContextTokens 必须为 0..10000000 整数；未声明表示未知');
+  }
   const limits = Object.fromEntries(Object.keys(CONTEXT_DEFAULTS).map(k => [k, positiveLimit(context[k], k)]));
   const files = context.contextFiles ?? [];
   if (!Array.isArray(files) || files.some(f => typeof f !== 'string') || files.length > limits.maxFiles) throw new BudgetDataError('context.contextFiles 超限或不是路径数组');
@@ -58,6 +62,7 @@ export function contextManifest({ brief = '', context = {}, worktree, command = 
     add(data.toString('utf8'), { kind: 'file', path: absolute });
   }
   return { kind: 'bounded-context-v1', limits, bytes, highTokens: high, entries,
+    ...(runtimeContextTokens === undefined ? {} : { runtimeContextTokens }),
     note: '显式输入快照 hash/字节/启发式 token；不扫描仓库。此界限不限制执行器运行后自行读取的文件/历史。' };
 }
 
@@ -72,10 +77,12 @@ export function prepareExecution({ spec, history, remainingTokens, brief, contex
     parseSpec(spec); // 先验证原始字段；上下文 floor 不能把非法负数/字符串悄悄修正成合法值。
     manifest = contextManifest({ brief, context, worktree, command, inputs: spec.inputs ?? [] });
     // 输入显式数字只能增加基线，不能把实际交付文本的 HIGH 压低到 0。
-    const effective = { ...spec, initialContextTokens: Math.max(spec.initialContextTokens ?? 0, manifest.highTokens) };
+    // Explicit native system/tool context is additional to the delivered input.
+    // Keep omitted fields absent in the manifest so existing prepared hashes work.
+    const effective = { ...spec, initialContextTokens: Math.max(spec.initialContextTokens ?? 0, manifest.highTokens) + (manifest.runtimeContextTokens ?? 0) };
     if (history && statSync(history, { throwIfNoEntry: false })?.size > 4 * 1048576) return blocked('budget-history-too-large');
     estimate = computeEstimate(parseSpec(effective), parseHistoryLines(history ? readHistoryText(history) : ''));
-    estimate.contextFloorTokens = manifest.highTokens;
+    estimate.contextFloorTokens = manifest.highTokens + (manifest.runtimeContextTokens ?? 0);
     // 历史低耗样本不能压低本次已知交接上下文。复用核心给出的未校准 HIGH，不重抄公式。
     const guardHigh = Math.max(estimate.totalTokens.high ?? 0, estimate.baselineTokens.totalTokens.high);
     estimate.executionGuardHighTokens = guardHigh;

@@ -73,6 +73,25 @@ test('历史低耗校准不能压低真实交接输入的执行HIGH下界', t =>
   assert.ok(decision.estimate.executionGuardHighTokens >= 334);
 });
 
+test('显式原生上下文附加到输入基线并按既有多轮模型计入 HIGH，省略保留旧 manifest', () => {
+  const req = { spec: spec(), remainingTokens: 10000, brief: 'fixed' };
+  const legacy = prepareExecution(req);
+  assert.equal(Object.hasOwn(legacy.context, 'runtimeContextTokens'), false);
+  const known = prepareExecution({ ...req, context: { runtimeContextTokens: 10000 } });
+  assert.equal(known.allowed, false);
+  assert.equal(known.reason, 'prediction-high-exceeds-budget');
+  assert.equal(known.context.runtimeContextTokens, 10000);
+  assert.equal(known.estimate.contextFloorTokens, legacy.context.highTokens + 10000);
+  const repeated = { ...req, spec: spec({ expectedCalls: 3, perCallToolResultTokens: 100 }) };
+  const before = prepareExecution(repeated);
+  const after = prepareExecution({ ...repeated, context: { runtimeContextTokens: 500 } });
+  assert.equal(after.estimate.baselineTokens.inputTokens.median - before.estimate.baselineTokens.inputTokens.median, 1500);
+  for (const value of [null, -1, 0.1, '1000', 10000001]) {
+    assert.equal(prepareExecution({ ...req, context: { runtimeContextTokens: value } }).reason, 'invalid-budget-or-context');
+  }
+  assert.equal(prepareExecution({ ...req, context: { runtimeContextTokens: 0 } }).reservedTokens, legacy.reservedTokens);
+});
+
 function guiFixture(t) {
   const dir = temp(t), marker = path.join(dir, 'sdk-loaded');
   const sdk = path.join(dir, 'sdk'), runtime = path.join(dir, 'runtime'), state = path.join(dir, 'state');

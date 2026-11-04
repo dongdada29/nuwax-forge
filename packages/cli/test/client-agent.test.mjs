@@ -36,7 +36,8 @@ if (${JSON.stringify(kind)} === 'codex' && args.some(arg => /^model_providers[.]
 }
 fs.appendFileSync(${JSON.stringify(marker)},'dispatch\\n');
 for await (const chunk of process.stdin) {}
-${hang ? 'setInterval(()=>{},1000);' : `for(const event of ${JSON.stringify(events)}) console.log(JSON.stringify(event));`}
+${hang === true ? '' : `for(const event of ${JSON.stringify(events)}) console.log(JSON.stringify(event));`}
+${hang ? 'setInterval(()=>{},1000);' : ''}
 `, { mode: 0o700 });
   const spec = { schemaVersion: 1, taskKey: 'fixture-only', worktree: wt,
     runtime: { kind, binary: executable, model: 'fixture-model', provider: 'deepseek-official', contextMode: 'fresh-exec' },
@@ -60,6 +61,26 @@ test('Codex cache is an input subset; missing token/corrupt totals are unknown, 
   const bad = structuredClone(codexEvents); bad[3].usage.cached_input_tokens = 101;
   assert.equal(observe('codex', bad).usageScope, 'unknown');
   assert.equal(observe('codex', [...codexEvents, codexEvents[3]]).usageScope, 'unknown');
+});
+test('reported lower bound survives termination without claiming complete usage; invalid reports cannot prove a bound', () => {
+  for (const [kind, events] of [['codex', codexEvents], ['deepseek-harness', dshEvents]]) {
+    const o = new Observation(kind); events.forEach(e => o.push(e));
+    const interrupted = o.result(false);
+    assert.equal(interrupted.usageScope, 'unknown');
+    assert.equal(interrupted.observation.known, false);
+    assert.equal(interrupted.observation.reportedTokensLowerBound, 110);
+    assert.equal(interrupted.usage.cachedReadTokens, 80);
+    o.bad('malformed-jsonl');
+    assert.equal(o.result(false).observation.reportedTokensLowerBound, null);
+  }
+  assert.equal(observe('codex', []).observation.reportedTokensLowerBound, null);
+  assert.equal(observe('codex', codexEvents.slice(1)).observation.reportedTokensLowerBound, null);
+  assert.equal(observe('codex', [...codexEvents, codexEvents[3]]).observation.reportedTokensLowerBound, null);
+  const badCache = structuredClone(codexEvents); badCache[3].usage.cached_input_tokens = 101;
+  assert.equal(observe('codex', badCache).observation.reportedTokensLowerBound, null);
+  const partial = observe('deepseek-harness', [...dshEvents.slice(0, 3), { type: 'status', phase: 'step_start', turn: 0, step: 1 }]);
+  assert.equal(partial.observation.known, false);
+  assert.equal(partial.observation.reportedTokensLowerBound, 110);
 });
 test('DSH rc5 exact total counted once, identical step snapshots dedup; conflict/missing/truncated remain unknown', () => {
   const known = observe('deepseek-harness', [...dshEvents, dshEvents[2]]);
@@ -92,7 +113,8 @@ for (const [kind, events] of [['codex', codexEvents], ['deepseek-harness', dshEv
 }
 test('prediction unknown/HIGH over/model mismatch block before dispatch', t => {
   for (const mutate of [s => delete s.budgetSpec, s => delete s.budgetSpec.perCallOutputTokens,
-    s => s.budget.maxTokens = 1, s => s.budgetSpec.model.name = 'different']) {
+    s => s.budget.maxTokens = 1, s => s.budgetSpec.model.name = 'different',
+    s => s.context = { runtimeContextTokens: 30000 }]) {
     const f = fixture(t); mutate(f.spec); const p = f.prepare(); assert.equal(p.status, 3, p.stderr);
     assert.equal(JSON.parse(p.stdout).status, 'blocked'); assert.equal(fs.existsSync(f.marker), false);
     assert.equal(f.cli(['run', '--state', f.state]).status, 2);
@@ -116,12 +138,59 @@ test('unknown actual blocks budget even with exit zero; cannot retry; context mu
   const g = fixture(t); g.spec.context = { contextFiles: ['input.txt'] }; fs.writeFileSync(path.join(g.wt, 'input.txt'), 'one');
   assert.equal(g.prepare().status, 0); fs.writeFileSync(path.join(g.wt, 'input.txt'), 'two');
   assert.equal(g.cli(['run', '--state', g.state]).status, 3); assert.equal(fs.existsSync(g.marker), false);
+  const h = fixture(t); h.spec.context = { runtimeContextTokens: 100 };
+  assert.equal(h.prepare().status, 0);
+  const request = read(path.join(h.state, 'request.json')); request.context.runtimeContextTokens = 200;
+  fs.writeFileSync(path.join(h.state, 'request.json'), JSON.stringify(request));
+  assert.equal(h.cli(['run', '--state', h.state]).status, 3); assert.equal(fs.existsSync(h.marker), false);
 });
 test('wall timeout stops owned marker process and persists unknown usage', t => {
   const f = fixture(t, 'codex', [], true); assert.equal(f.prepare().status, 0);
   const r = f.cli(['run', '--state', f.state]); assert.equal(r.status, 1, r.stderr);
   const out = JSON.parse(r.stdout); assert.equal(out.stopReason, 'wall-timeout'); assert.equal(out.processPassed, false);
   assert.equal(out.chargedTokens, null); assert.equal(out.acceptancePassed, null);
+  assert.equal(out.observedBudget.reportedTokensLowerBound, null);
+  assert.equal(out.observedBudget.verdict, 'unknown');
+});
+test('reported overflow stays explicit after forced termination and repeat reconciliation, with complete billing unknown', t => {
+  const events = structuredClone(codexEvents);
+  events[3].usage = { input_tokens: 25000, output_tokens: 50, cached_input_tokens: 24000 };
+  const f = fixture(t, 'codex', events, 'after-events');
+  assert.equal(f.prepare().status, 0);
+  const r = f.cli(['run', '--state', f.state]); assert.equal(r.status, 1, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.stopReason, 'observed-token-budget-exceeded');
+  assert.equal(out.processPassed, false); assert.equal(out.agentCompleted, true);
+  assert.equal(out.usageKnown, false); assert.equal(out.chargedTokens, null);
+  assert.equal(out.budgetPassed, false); assert.equal(out.acceptancePassed, null);
+  assert.equal(out.cleanupFailed, false);
+  assert.deepEqual(out.observedBudget, read(path.join(f.state, 'budget-reconcile.json')).observedBudget);
+  assert.equal(out.observedBudget.verdict, 'exceeds');
+  assert.equal(out.observedBudget.reportedTokensLowerBound, 25050);
+  const usage = read(path.join(f.state, 'usage.json'));
+  assert.equal(usage.usageScope, 'unknown');
+  assert.equal(usage.usage.cachedReadTokens, 24000);
+  assert.deepEqual(usage.observation.rawUsage, [events[3].usage]);
+  const bill = read(path.join(f.state, 'budget-reconcile.json'));
+  assert.equal(bill.reconciliation.budget.verdict, 'unknown');
+  assert.equal(bill.reconciliation.usableForCalibration, false);
+  const repeated = f.cli(['reconcile', '--state', f.state]); assert.equal(repeated.status, 1);
+  assert.deepEqual(JSON.parse(repeated.stdout).observedBudget, out.observedBudget);
+  assert.equal(fs.readFileSync(f.marker, 'utf8'), 'dispatch\n');
+  fs.appendFileSync(path.join(f.state, 'stdout.jsonl'), 'not-json\n');
+  const corrupted = f.cli(['reconcile', '--state', f.state]); assert.equal(corrupted.status, 1);
+  assert.equal(JSON.parse(corrupted.stdout).observedBudget.reportedTokensLowerBound, null);
+  assert.equal(JSON.parse(corrupted.stdout).budgetPassed, false);
+});
+test('partial reported usage below the limit cannot pass the budget gate', t => {
+  const f = fixture(t, 'deepseek-harness', dshEvents.slice(0, 3));
+  assert.equal(f.prepare().status, 0);
+  const r = f.cli(['run', '--state', f.state]); assert.equal(r.status, 1, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.processPassed, true); assert.equal(out.usageKnown, false);
+  assert.equal(out.observedBudget.reportedTokensLowerBound, 110);
+  assert.equal(out.observedBudget.verdict, 'unknown');
+  assert.equal(out.budgetPassed, false); assert.equal(out.chargedTokens, null);
 });
 test('DSH scoped env and patch avoid global settings/session adoption', () => {
   const env = environment('deepseek-harness', '/fixture'); assert.equal(env.DSH_HOME, '/fixture/dsh-home');
