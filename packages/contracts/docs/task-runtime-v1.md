@@ -29,8 +29,8 @@
 
 ## level（verification）
 
-`source-tooling`（已实现）| `gui-toolchain-smoke` | `gui-product-scenario`（两级 GUI 为已定义、
-pending live driver，见 [../../../docs/CAPABILITIES.md](../../../docs/CAPABILITIES.md)）。
+`source-tooling` 由既有 verify/TaskStore 校验链支持；`gui-toolchain-smoke` 与 `gui-product-scenario`
+由可选 live driver 使用独立 GUI 契约，不导入旧 TaskStore。当前范围见 [能力说明](../../../docs/CAPABILITIES.md)。
 `passed=true` 只覆盖声明的 level 与 predicates；source-tooling 不代表 GUI/安装包/真机/线上通过。
 
 ## verification manifest

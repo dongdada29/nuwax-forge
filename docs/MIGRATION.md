@@ -1,5 +1,7 @@
 # 迁移与来源（provenance）
 
+> 历史归档：2026-10-27 的一次性导入来源记录；下文零源码改动、初始 git 状态与旧计数均描述导入当时，不描述当前仓库。 当前状态见[文档导航](README.md)，历史资料见[归档索引](archive/README.md)。
+
 状态：**已执行**。导入工具与排除规则固化在 [scripts/import_from_pilot.py](../scripts/import_from_pilot.py)，
 逐文件 SHA256 记录在 [provenance/provenance.json](../provenance/provenance.json)。
 

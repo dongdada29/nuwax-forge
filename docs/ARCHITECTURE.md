@@ -1,68 +1,53 @@
 # 架构
 
-状态：**已实现**（本仓库全部真实运行过；见 [IMPLEMENTATION-RESULT.md](../IMPLEMENTATION-RESULT.md)）。
+核对基线：2026-11-04，main `c5327dd`。本页描述当前源码的模块关系；验收范围见 [CAPABILITIES.md](CAPABILITIES.md)，早期导入结果见[历史索引](archive/README.md)。
 
 ## 仓库布局
 
-```
-nuwax-devkit/
-├── package.json            # private、workspaces: packages/*、无发布脚本
+```text
+nuwax-forge/
 ├── packages/
-│   ├── nuwax-stack/        # @nuwax-ai/devkit-stack（Python skill 资源，含 scripts）
-│   ├── nuwax-crew/         # @nuwax-ai/devkit-crew（Python 标准库）
-│   ├── nuwa-sdlc-kit/      # @nuwax-ai/nuwa-sdlc-kit（保留原名；kit/VERSION=1.5.0）
-│   ├── contracts/          # @nuwax-ai/devkit-contracts（schema 正本 + level + GUI fixture 校验器）
-│   └── cli/                # @nuwax-ai/devkit-cli（bin: nuwax-devkit）
-├── scripts/                # import_from_pilot.py（导入+provenance）、pack.mjs（打包+核对）
-├── provenance/provenance.json
-├── docs/                   # 本文档与其余文档
-└── IMPLEMENTATION-RESULT.md / .json
+│   ├── cli/                # @nuwax-ai/devkit-cli，公共命令 nuwax-forge
+│   ├── dashboard/          # @nuwax-ai/devkit-dashboard，本地只读投影与 Web 页面
+│   ├── nuwax-stack/        # @nuwax-ai/devkit-stack，任务状态与验收证据
+│   ├── nuwax-crew/         # @nuwax-ai/devkit-crew，有限执行器路由
+│   ├── nuwa-sdlc-kit/      # 固定配方与仓内规则，保留原包名
+│   └── contracts/          # 契约正本与校验模块
+├── integrations/
+│   ├── dsh-dashboard/      # DSH 原生侧栏/面板，嵌入显式本地 Forge URL
+│   └── ds-bot-forge/       # DSH 原生工具桥，仅 prepare/status
+├── skills/nuwax-forge/     # 统一薄 Skill
+├── scripts/                # 安装、打包、离线集成测试与来源复核
+├── docs/                   # 当前用法、专项证据及历史索引
+└── provenance/             # 一次性源码导入的历史指纹
 ```
 
-**文件夹名是契约的一部分**：stack 的集成测试用 `ROOT.parent / "nuwax-crew"`、
-`ROOT.parent / "nuwa-sdlc-kit"` 定位兄弟包，因此 packages/ 下的目录名不可改。
+Stack 集成依赖 `nuwax-crew` 与 `nuwa-sdlc-kit` 兄弟目录名，不能只为统一命名而更改包目录。六包版本见各自 `package.json`；CLI 精确依赖五个兄弟包。兼容命令 `nuwax-devkit` 转发到同一公共入口。
 
-## verify 数据流（source-tooling，已实现）
+## 身份、执行与原有任务系统
 
-```
-nuwax-devkit verify --project P --state S --task-key K [--node N] [--reuse]
-  └─ require.resolve 定位本安装的 @nuwax-ai/devkit-stack 与 @nuwax-ai/devkit-crew
-  └─ spawn(python3, [-B, stack/skills/nuwax-stack/scripts/run_verification.py,
-        --repo P, --crew-root <crew包根>, --state S, --task-key K, --node N, ...])   # argv 数组，无 shell
-       ├─ 读 P/.sdlc.json 的 verification 绑定（kit verify:init 接线产物）
-       ├─ crew 路由（纯函数）→ runner 执行配方 stages（kit engine verify.mjs，经可信 Node）
-       ├─ verification.py 复核 manifest：HEAD、输入指纹、阶段结果、日志哈希
-       └─ TaskStore（S 下 sqlite）导入证据；--reuse 时复检旧证据，篡改即失效重跑
-  └─ CLI 透传桥接 JSON；exit 0 还需 passed===true 才算通过
-```
+| 对象 | 拥有者与职责 | Forge 接线 |
+| --- | --- | --- |
+| Chief、Bot、群、记忆、持久 Session | 固定原版 DS-Bot，运行在真实 DSH | `bots plan/prepare/check/run` 准备和启动隔离团队；不复制 Bot 引擎 |
+| 一次 Worker 执行 | Forge `agent prepare/run/reconcile` 与既有预算/上下文门 | Codex / DSH fresh headless 适配；进程、用量、预算和验收分别记录 |
+| Bot 提出的有限任务 | 操作者预置可信模板；DSH 原生工具注册 | `forge_prepare` 准备新 attempt，`forge_status` 查询明确 attempt；未开放 run/approve/reconcile 工具 |
+| PA 用户任务、审批、恢复与交付 | 原 Personal Agent | 看板仅接收显式导出的 TaskSnapshot，不写 PA、不建立第二任务库或审批链 |
 
-关键不变量：`processPassed` 与 `acceptancePassed` 分离；退出码 0、全 skipped、缺证据都不代表验收通过；
-`--node` 显式可信绝对路径贯穿配方执行、validatorArgv、TaskStore 导入与复检。
+Bot 团队不会因安装 Forge 桥而自动获得执行授权。现有桥和 PA 快照适配也不构成 Bot → PA → Forge 的完整业务流程。群成员有独立 Session，但首次群提示会包含该成员自身私聊摘要；[群专项](BOT-GROUP-ROUTING-ACCEPTANCE.md) 记录了这一行为与证据边界。
 
-## 契约与单正本
+## 执行与证据流
 
-- `packages/contracts/schemas/verification-v1.schema.json` 是**唯一正本**（自原 stack references 迁入）。
-- stack 技能分发携带**字节一致的自包含副本**（`skills/nuwax-stack/references/verification-v1.schema.json`），
-  由 `npm run contracts:sync` 同步、`npm run contracts:check` 校验，contracts 测试含字节漂移断言。
-- task/runtime 字段**只声明已实现的部分**（见 [contracts/docs/task-runtime-v1.md](../packages/contracts/docs/task-runtime-v1.md)），
-  真实强校验仍是运行中的 `crew/contract.py` 与 `stack/scripts/verification.py`；
-  不用空壳 schema 冒充完整强校验。level 边界见 [CAPABILITIES.md](CAPABILITIES.md)。
+- `verify`：CLI 按安装位置解析 Stack/Crew → Python runner 读取消费项目的 verification 绑定 → Kit 执行固定配方 → 复核 HEAD、输入指纹、日志和阶段结果 → 既有 TaskStore 导入证据。`--reuse` 仍须通过原有证据复检。
+- `agent`：doctor 检查适配协议 → prepare 验证预算 HIGH 和有限上下文 → 显式 run 启动一次执行 → reconcile 记录已有观测。缺失完整用量保持 unknown；已报告下界超限可以与完整结算 unknown 同时成立。
+- Bot：Forge 校验固定归档 → DSH 插件管理器安装原包 → 原客户端/roster/groups/memory 管理团队。`check` 只证明版本、文件和配置组合，输出的 host/UI/modelBehavior 保持 not-run。
+- 看板：Crew 台账、Stack Assignment、Forge agent 状态、预算快照及 PA 导出 → 显式来源适配 → 本地只读页面。只按结构化证据关联；不跨来源直接求和或从名称猜关系。DSH 插件只展示已允许的 Forge iframe 来源。
 
-## CLI 定位方式
+`processPassed`、`pluginReady`、任务执行完成、人工交付接收与产品验收是不同证据。退出 0、全 skipped、模拟回复和快照新鲜都不能替代真实产品验收。
 
-`packages/cli/lib/resolve.mjs` 以 CLI 自身安装位置为基准 `require.resolve(name + '/package.json')`，
-向上走 node_modules 链找到安装后的同级包。**不硬编码旧试点或源码绝对路径**；
-`NUWAX_DEVKIT_RESOLVE_ROOT` 只是缺依赖诊断的测试钩子。子进程一律 argv 数组。
+## 契约、分发与运行边界
 
-## 版本与依赖策略
+`packages/contracts/schemas/verification-v1.schema.json` 是 verification 契约正本；Stack 分发的自包含副本由 `contracts:sync/check` 保持字节一致。task/runtime 的已实现字段及实际校验器见 [task-runtime-v1.md](../packages/contracts/docs/task-runtime-v1.md)，不以 schema 声明代替运行校验。
 
-- 统一本地预发布：新包 `0.1.0-devkit-local.1`；kit 为 `1.5.0-devkit-local.1`
-  （与 `kit/VERSION` 的 1.5.0 发布线兼容）。根 package.json `private: true`，无发布脚本。
-- CLI 对 4 个兄弟包声明**精确同版本**依赖（非 `workspace:*`），monorepo 内 npm 以 workspace
-  本地链接满足；5 个 tarball 同时安装时版本精确匹配、离线可解析。
-- 各包 `files` 白名单分发；无 postinstall 副作用；`npm install --ignore-scripts --offline` 可装。
+CLI 以自身安装位置 `require.resolve` 定位兄弟包，子进程使用 argv 数组。核心依赖 Node >=22、Python >=3.10；六包使用本地预发布版本号。DSH、DS-Bot 和 GUI SDK 属于单独准备的可选运行时，源码具备入口不等于用户已有安装包含它。
 
-## 环境与边界
-
-Node >= 22、Python >= 3.10（标准库）。不引入 Nx/Turbo/TS 构建；不重写 Python 引擎；
-npm 分发只携带 Python 源码。`.github/workflows/ci.yml` 已写但**未在远程运行**。
+默认无 opt-in 环境变量时，安装/测试/打包不运行模型或真实宿主。真实 DSH、固定上游、浏览器与模型验收另行显式运行；[集成测试入口](INTEGRATION-TESTS.md) 列出默认覆盖范围。远程 CI 已运行并覆盖测试、契约校验与打包，不代表部署、安装升级或供应商 token 硬配额。

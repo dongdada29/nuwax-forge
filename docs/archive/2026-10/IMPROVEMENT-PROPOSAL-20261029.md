@@ -1,5 +1,7 @@
 # nuwax-devkit 实跑复盘与优化建议（2026-10-29）
 
+> 历史归档：这是 2026-10-28 实跑、2026-10-29 编写的提案，基线为 `70c1c99`。原路径、数字、问题和建议按当时记录保留；本文未重新核验这些问题在当前版本是否仍复现或已修复。当前状态见[文档导航](../../README.md)。
+
 本次用本地 devkit 为 Nuwax v3.0.26 的截图与 Computer Use 修复运行验收。固定脚本、任务状态和日志归档能够使用；最先应修复的是 `--reuse` 对环境依赖的遗漏：相同源码在应当失败的环境中，能够复用旧的通过结论。其次补齐工件声明、GUI 操作和项目就绪信息，再优化运行时间。
 
 这是基于实际运行的改进方案，尚未修改 devkit 实现。核对基线为 `70c1c99`，实跑日期为 2026-10-28。项目根目录 `/Users/apple/workspace/nuwax-devkit`；client 验证使用仓外隔离副本，源码为 `8f34dbc1dc6ea40d1547c85f988e94b17a69d4ab`。
@@ -41,9 +43,9 @@ console.log(JSON.stringify({
 
 ### 代码原因
 
-- [kit/engine/verify.mjs](../packages/nuwa-sdlc-kit/kit/engine/verify.mjs) 第 80–94 行记录文件、HEAD 和 hostname/platform/arch/Node 等信息；第 106 行执行阶段却继承整个 `process.env`。配方无法声明哪些环境变量影响结果。
-- [task_state.py](../packages/nuwax-stack/skills/nuwax-stack/scripts/task_state.py) 第 43–90 行校验当前证据，其中环境比较不含配方的环境依赖。
-- [run_verification.py](../packages/nuwax-stack/skills/nuwax-stack/scripts/run_verification.py) 第 54–64 行在上述校验通过后直接返回复用成功，因此只修 Node 引擎的一条路径不足以解决 CLI 复用。
+- [kit/engine/verify.mjs](../../../packages/nuwa-sdlc-kit/kit/engine/verify.mjs) 第 80–94 行记录文件、HEAD 和 hostname/platform/arch/Node 等信息；第 106 行执行阶段却继承整个 `process.env`。配方无法声明哪些环境变量影响结果。
+- [task_state.py](../../../packages/nuwax-stack/skills/nuwax-stack/scripts/task_state.py) 第 43–90 行校验当前证据，其中环境比较不含配方的环境依赖。
+- [run_verification.py](../../../packages/nuwax-stack/skills/nuwax-stack/scripts/run_verification.py) 第 54–64 行在上述校验通过后直接返回复用成功，因此只修 Node 引擎的一条路径不足以解决 CLI 复用。
 
 ### 建议设计及验收
 
@@ -71,7 +73,7 @@ console.log(JSON.stringify({
 
 ## 3. 扩展 GUI 操作与桌面适配（P1）
 
-[GUI contract](../packages/cli/lib/gui/contract.mjs) 当前仅接受 `fill`、`domValueEquals`、`aiBoolean`。本次保存按钮 click 的离线契约探测被拒绝，记录见 `devkit-gui-capability-probe.json`。因此本次使用自定义固定脚本启动独立 Electron 测试，尚未形成内置 live GUI 场景。
+[GUI contract](../../../packages/cli/lib/gui/contract.mjs) 当前仅接受 `fill`、`domValueEquals`、`aiBoolean`。本次保存按钮 click 的离线契约探测被拒绝，记录见 `devkit-gui-capability-probe.json`。因此本次使用自定义固定脚本启动独立 Electron 测试，尚未形成内置 live GUI 场景。
 
 建议分两步增加能力：
 

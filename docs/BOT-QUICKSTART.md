@@ -1,6 +1,6 @@
 # 启动原版 DS-Bot 团队
 
-Forge 使用固定的 `ds-bot@0.2.7` 和真实 DSH `0.2.1-rc.5`。界面、Bot、群聊、模型设置和记忆面板均来自原插件；这里提供隔离安装和前台启动入口。完整来源与隔离边界见 [BOT-INTEGRATION.md](BOT-INTEGRATION.md)。
+Forge 使用固定的 `ds-bot@0.2.7` 和真实 DSH `0.2.1-rc.5`。界面、Bot、群聊、模型设置和记忆面板均来自原插件；这里提供隔离安装和前台启动入口。公共命令已合入主线，原有安装需检查是否包含此功能。完整来源、各层已验范围及未验项见 [BOT-INTEGRATION.md](BOT-INTEGRATION.md)。
 
 ## 第一次准备
 
@@ -53,3 +53,5 @@ node --test packages/cli/test/bots-*.test.mjs packages/cli/test/cli.test.mjs
 ```
 
 本次不证明真实模型回答、记忆写入/总结、群内实际 `@` 派发、系统默认浏览器打开、完整群详情面板或移动端布局。浏览器验收使用 nuwa-browser；自动化测试只验证原生宿主发出打开请求，不启动系统默认浏览器。上述浏览器记录与默认 API 测试是两组验收；API 测试的 `modelCallsRequested=0` 不适用于建群自动问候的 UI 记录。
+
+此节只描述原生浏览器与启动验收；另有[非空记忆](BOT-MEMORY-ACCEPTANCE.md)、[群调度](BOT-GROUP-ROUTING-ACCEPTANCE.md)的原模块契约，以及[真实宿主到本地模拟 provider](BOT-PROVIDER-HOST-ACCEPTANCE.md)的专项证据。需要 Bot 准备有限 Forge 任务时，另按[工具桥说明](BOT-FORGE-BRIDGE.md)配置；`bots prepare/run` 不会自动加载桥或连接 PA。

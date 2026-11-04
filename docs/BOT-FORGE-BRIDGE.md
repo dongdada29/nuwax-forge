@@ -1,11 +1,13 @@
 # Bot → Forge 最小业务接线
 
-`integrations/ds-bot-forge/index.mjs` 是 DSH 原生 Cordis host 插件。Chief 和普通 Bot Session 通过既有 `ctx.tools` 调用同一接口，无额外 Bot runtime、任务库、Worker 或审批库。它独立于 DS-Bot 安装 PR，可与原版 `ds-bot@0.2.7`、DSH `0.2.1-rc.5` 组合。
+`integrations/ds-bot-forge/index.mjs` 是已合入主线的 DSH 原生 Cordis host 插件。Chief 和普通 Bot Session 通过既有 `ctx.tools` 调用同一接口，无额外 Bot runtime、任务库、Worker 或审批库。它需操作者独立启用，可与原版 `ds-bot@0.2.7`、DSH `0.2.1-rc.5` 组合；`nuwax-forge bots prepare/run` 不会自动安装或加载此桥。整体状态见 [Bot 接入汇总](BOT-INTEGRATION.md)。
 
 - `forge_prepare({workspace, taskKey, brief})`：读取操作者预先固定的模板，调用既有 Forge `agent prepare`，执行原有 doctor 和预算 HIGH 门。短 brief 上限 16KiB，不运行模型。
 - `forge_status({attemptId})`：只读明确 attempt 的固定文件，不枚举任务、会话、目录或凭据。返回来源 taskKey、attempt=1、调用 Bot Session、实际执行 Session（未运行时 null）与独立状态/预算/验收字段。
 
 没有 run、approve、reconcile 工具。`prepared` 仅提供带 `requiresOperatorAuthorization: true` 的既有 `agent run --state` argv，操作者需在已有授权范围内自行执行，然后用原有 `agent reconcile` 结算。Bot 不能替人批准；返回命令不构成授权。安装此插件不更改既有 DSH approval/permission，原生 pre-execute、guard、取消仍有效。
+
+[PA 接入](PERSONAL-AGENT-ADAPTER.md) 当前仅为看板读取导出快照。此桥不创建 PA 任务、不批准 PA 工作，也不构成 Bot → PA → Forge 的完整业务链；原有任务、审批和恢复继续由原系统负责。
 
 ## 操作者配置与新状态根
 
