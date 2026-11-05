@@ -7,6 +7,8 @@ export const USAGE = `用法：
   nuwax-forge stack task-state --command <trigger-record|trigger-read|ticket-admit|ticket-read|assignment-prepare|assignment-start|assignment-report|assignment-finish> --input <JSON 文件>
   nuwax-forge help
   nuwax-forge dsh-plugin <add|remove|inspect|run> --profile <DSH profile> [--package <npm包或路径>] [--binary <dsh>]
+            run 可加 --startup-binding <绝对路径绑定JSON>：宿主 exit 0 不足以证明插件就绪，
+            按启动证据评估，未就绪时退出码置 1（详见 lib/dsh-task-evidence.mjs）
   nuwax-forge bots <plan|prepare|check|run> --root <独立绝对目录> --dsh <DSH绝对路径> [--json]
   nuwax-forge bots run --root <已准备目录> --dsh <DSH绝对路径> [--port <0..65535>] [--open]
   nuwax-forge dashboard --ledger <JSONL> --registry <JSON> (--out <HTML> | --serve) [--port <0..65535>] [--refresh-seconds <5..3600>] [--health <JSON>] [--matrix <JSON>] [--task-store <tasks.sqlite>] [--agent-state <state目录>] [--agent-state-root <目录>] [--host-budget <guard.json>] [--approval-store <approvals.sqlite>] [--personal-agent-snapshot <PA 导出 JSON>] [--embed-origin <DSH Web origin>] [--python <解释器>]
