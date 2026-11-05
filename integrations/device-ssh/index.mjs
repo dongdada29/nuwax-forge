@@ -61,7 +61,7 @@ export function createTools(rawConfig, deps = {}) {
     { name: 'device_ssh_status', description: 'Read-only SSH reachability for all configured devices. No command execution.', parameters: { type: 'object', additionalProperties: false, properties: {} }, execute: status },
     { name: 'device_ssh_probe', description: 'Read-only SSH probe for one device alias. No command execution.', parameters: { type: 'object', additionalProperties: false, required: ['device'], properties: { device: { type: 'string', maxLength: 40 } } }, execute: probe },
   ];
-  if (config.exec.enabled) tools.push({ name: 'device_ssh_exec', description: 'Run one allowlisted literal-argv command on a device. Refuses anything not matching the operator allowlist; no shell.', parameters: { type: 'object', additionalProperties: false, required: ['device', 'argv'], properties: { device: { type: 'string', maxLength: 40 }, argv: { type: 'array', maxItems: 16, items: { type: 'string', maxLength: 200 } } } }, execute: exec });
+  if (config.exec.enabled) tools.push({ name: 'device_ssh_exec', description: 'Run one allowlisted command on a device. Allowlist constrains literal argv prefixes only; no local shell, but the remote login shell still interprets the command line — keep allowlist entries tight (e.g. fixed arguments).', parameters: { type: 'object', additionalProperties: false, required: ['device', 'argv'], properties: { device: { type: 'string', maxLength: 40 }, argv: { type: 'array', maxItems: 16, items: { type: 'string', maxLength: 200 } } } }, execute: exec });
   return { config, tools, disconnectAll: async () => { for (const handle of sessions.values()) disconnect(handle, { transport, ...store }); } };
 }
 

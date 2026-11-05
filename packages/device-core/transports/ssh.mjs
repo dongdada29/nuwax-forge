@@ -34,6 +34,7 @@ export function createSshTransport(options = {}) {
     const spawned = spawnSync(sshPath, [...baseArgs(handle), '--', ...argv], { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
     if (spawned.error) {
       if (spawned.error.code === 'ETIMEDOUT') return { status: null, signal: 'SIGTERM', error: { code: 'SSH_TIMEOUT', message: `Command exceeded ${timeoutMs}ms.` }, stdout: '', stderr: '' };
+      if (String(spawned.error.message ?? '').includes('maxBuffer')) return { status: null, signal: null, error: { code: 'SSH_OUTPUT_OVERFLOW', message: 'Command output exceeded the 4MiB capture buffer.' }, stdout: '', stderr: '' };
       return { status: null, signal: null, error: { code: 'SSH_SPAWN', message: `ssh binary unavailable: ${spawned.error.code ?? 'unknown'}` }, stdout: '', stderr: '' };
     }
     return { status: spawned.status, signal: spawned.signal, error: null, stdout: spawned.stdout ?? '', stderr: spawned.stderr ?? '' };
