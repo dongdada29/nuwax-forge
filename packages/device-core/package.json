@@ -1,0 +1,7 @@
+{
+  "name": "@nuwax-ai/device-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": { "test": "node --test test/" }
+}
