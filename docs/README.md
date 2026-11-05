@@ -12,6 +12,7 @@
 | 查看 Bot 当前验收状态 | [Bot 接入汇总](BOT-INTEGRATION.md) |
 | 让 Bot 准备一次有限执行 | [Bot → Forge 桥](BOT-FORGE-BRIDGE.md)：需操作者配置，仅 prepare/status |
 | 把 Bot、PA intake 与 Forge 接成一条链 | [专用实例接线](BOT-PA-FORGE-WIRING.md)：三跳全默认关，专用实例开启 |
+| 设计跨 DSH/Forge 双宿主的设备连接插件 | [插件兼容设计](DSH-PLUGIN-COMPAT.md)：四公共接口，U3 试点 SSH |
 | 使用 Codex / DSH 有限执行器 | [Agent 适配](CLIENT-AGENTS.md)、[预算与上下文](AGENT-BUDGET-EFFICIENCY.md) |
 | 查看任务与用量 | [CLI 看板](../packages/cli/README.md#运行看板)、[DSH 看板插件](DSH-DASHBOARD-INTEGRATION.md)、[预算下界展示](DASHBOARD-BUDGET-OBSERVATION.md) |
 | 展示原 PA 任务与交付状态 | [PA 快照适配](PERSONAL-AGENT-ADAPTER.md)：只读本地导出，不控制 PA |
