@@ -12,6 +12,9 @@ delete env.DUET_UPSTREAM;
 const paTests = readdirSync(new URL('../integrations/personal-agent-forge/test/', import.meta.url))
   .filter(name => name.endsWith('.test.mjs')).sort()
   .map(name => `integrations/personal-agent-forge/test/${name}`);
+const sshTests = readdirSync(new URL('../integrations/device-ssh/test/', import.meta.url))
+  .filter(name => name.endsWith('.test.mjs')).sort()
+  .map(name => `integrations/device-ssh/test/${name}`);
 
 const result = spawnSync(process.execPath, [
   '--test',
@@ -19,6 +22,7 @@ const result = spawnSync(process.execPath, [
   'integrations/dsh-dashboard/test/client.test.mjs',
   'integrations/ds-bot-forge/bridge.test.mjs',
   ...paTests,
+  ...sshTests,
 ], { cwd: root, env, shell: false, stdio: 'inherit' });
 
 if (result.error) {
