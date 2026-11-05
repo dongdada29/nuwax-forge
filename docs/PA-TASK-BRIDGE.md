@@ -104,7 +104,7 @@ commandId 是 `forge_` 加 `SHA256(JSON.stringify([instanceId, sessionId, reques
 
 保留完整的实例、Bot、DSH session/tool call 以及原 Task/Attempt/Run/Stage/Approval/Artifact/Verification IDs，不截断，不按标题合并。缺失 attempt 或集合保持 null，不从 task.activeAttemptId、事件或相邻 run 补齐。source 明确 `sourceAuthenticated:false`，instanceId 是操作者标签，当前不声称密码学实例认证。
 
-status 与 deliveryStatus 独立：completed 不等于 accepted，accepted 不等于产品验收；`productAcceptancePassed:null`。本只读投影尚未导入 Worker 的结构化实际模型/用量，相关字段保持 null/unknown，不拿配置、缺失或 0 当作完成证据。事件只提取 seq/type/time/显式 attempt；不输出任意 event data、配置快照、权限 rawInput、验证 argv、工件正文或服务器模板路径。重复/倒序 seq、超 cursor、跨 task、重复 IDs 与明确关系冲突拒绝；未实现 SSE/持久游标，不承诺历史完整性或进程存活。
+status 与 deliveryStatus 独立：completed 不等于 accepted，accepted 不等于产品验收；`productAcceptancePassed:null`。任务快照从唯一一条 `forge.delivery_verified` 事件（PA `recordForgeDelivery` 记录的 `ForgeExecutionRecord.result`）导入 Worker 用量：`usageKnown:true` 且 chargedTokens 为非负安全整数、sessionId 合法时，`chargedTokens` 与 `executionSessionId` 同时落到 task 与 `runId` 精确相等的那条 run；`usageKnown:false` 降级为 unknown 口径（不硬填、不拒绝）；宣称已知但校验失败则整响应拒绝；runId 不匹配只填 task 不填 run。`inputTokens/outputTokens/actualModel` 保持 null——Forge 结算只认证 charged 总量与会话身份，无 input/output 分拆与模型名，用量下界不当账单。任务列表接口不带事件，用量维持 unknown。本投影不拿配置、缺失或 0 当作完成证据。事件只提取 seq/type/time/显式 attempt；不输出任意 event data、配置快照、权限 rawInput、验证 argv、工件正文或服务器模板路径。重复/倒序 seq、超 cursor、跨 task、重复 IDs、重复 delivery 与明确关系冲突拒绝；未实现 SSE/持久游标，不承诺历史完整性或进程存活。
 
 ## 验证与边界
 

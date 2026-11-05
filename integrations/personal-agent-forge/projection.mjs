@@ -18,6 +18,18 @@ const unique = (rows, key) => {
   return rows;
 };
 const unknownUsage = () => ({ known: null, inputTokens: null, outputTokens: null, chargedTokens: null, actualModel: null, executionSessionId: null });
+// Forge settlement only certifies the charged total and the worker session
+// identity. Input/output split and model name stay out: PA does not expose
+// them yet, and a reported lower bound is not a bill, so never fill them in.
+// A delivery that reports usageKnown:false degrades to unknown instead of
+// rejecting — that keeps the recorded no-billing stance instead of lying.
+const deliveryUsage = data => {
+  check(record(data), RESPONSE, 'PA forge delivery payload is invalid.');
+  const runId = optionalId(data.runId);
+  if (data.usageKnown !== true) return { runId, usage: unknownUsage() };
+  check(Number.isSafeInteger(data.chargedTokens) && data.chargedTokens >= 0, RESPONSE, 'PA forge delivery usage is inconsistent.');
+  return { runId, usage: { known: true, inputTokens: null, outputTokens: null, chargedTokens: data.chargedTokens, actualModel: null, executionSessionId: identifier(data.sessionId, RESPONSE) } };
+};
 
 export function projectTask(value, config) {
   check(record(value), RESPONSE, 'PA task is invalid.');
@@ -61,18 +73,26 @@ export function projectSnapshot(value, expectedId, config) {
     return row;
   };
   let previousSeq = 0;
+  let delivery = null;
   const events = array(value.events, config).map(row => {
     linked(row);
     check(Number.isSafeInteger(row.seq) && row.seq > previousSeq && row.seq <= value.cursor, RESPONSE, 'PA event replay is unordered, duplicated, or beyond the snapshot cursor.');
     previousSeq = row.seq;
-    return { seq: row.seq, taskId: row.taskId, attemptId: optionalId(row.attemptId), type: text(row.type, 200), createdAt: text(row.createdAt, 128) };
+    const type = text(row.type, 200);
+    if (type === 'forge.delivery_verified') {
+      check(delivery === null, RESPONSE, 'PA reports more than one verified Forge delivery.');
+      delivery = deliveryUsage(row.data);
+    }
+    return { seq: row.seq, taskId: row.taskId, attemptId: optionalId(row.attemptId), type, createdAt: text(row.createdAt, 128) };
   });
+  if (delivery) projectedTask.usage = delivery.usage;
   const collection = (key, project) => value[key] === undefined ? null : unique(array(value[key], config).map(row => project(linked(row))), 'id');
   const identity = row => ({ id: identifier(row.id, RESPONSE), taskId: row.taskId, attemptId: optionalId(row.attemptId) });
   const result = {
     task: projectedTask, cursor: value.cursor, events,
     stages: collection('stages', row => ({ ...identity(row), name: text(row.name, 100), status: text(row.status, 100) })),
-    runs: collection('runs', row => ({ ...identity(row), stageId: optionalId(row.stageId), role: text(row.role, 100), status: text(row.status, 100), usage: unknownUsage() })),
+    runs: collection('runs', row => ({ ...identity(row), stageId: optionalId(row.stageId), role: text(row.role, 100), status: text(row.status, 100),
+      usage: delivery !== null && delivery.runId !== null && row.id === delivery.runId ? delivery.usage : unknownUsage() })),
     artifacts: collection('artifacts', row => ({ ...identity(row), kind: text(row.kind, 100), name: text(row.name, 1000) })),
     verifications: collection('verifications', row => ({ ...identity(row), stageId: optionalId(row.stageId),
       exitCode: Number.isSafeInteger(row.exitCode) ? row.exitCode : null,
