@@ -69,6 +69,8 @@ evaluateStepEvidence(expectedStep, outcome) => {
 }
 ```
 
+U3 落地口径（`packages/device-core`）：`stepPassed === processPassed`——verify 回执只进 `evidence`、不门控 `stepPassed`；语义门控留给宿主按 `evidence` 自行判定（Forge 侧 `device-ssh` 同此，`processPassed` 即工具返回的执行结论）。
+
 落点：`packages/cli/lib/dsh-task-evidence.mjs` 同目录新增 `device-step-evidence.mjs`，复用绑定/污染/大小限制纪律（safeParent、O_NOFOLLOW、排他发布）。观察文档明确的边界继续有效：acceptancePassed/usage/budget 不从装载状态推算。
 
 ### ④ 宿主适配就绪检查 `hostReadiness`
