@@ -7,7 +7,7 @@ import json
 import sqlite3
 import sys
 
-from . import contract, dispatch, health, ledger, registry, router, runner, usage
+from . import contract, dispatch, health, ledger, registry, router, runner, usage, watchdog
 
 VERIFY_BRIEF = {
     "taskKey": "executor-verify-mini",
@@ -140,6 +140,15 @@ def _dashboard_module():
     return dashboard_cli
 
 
+def cmd_patrol(args) -> int:
+    summary = watchdog.patrol(args.ledger, args.alerts, window_days=args.window_days,
+                              spin_dispatched=args.spin, fail_streak=args.fail_streak,
+                              executor_fail_streak=args.executor_fail_streak,
+                              burn_seconds=args.burn_seconds, suppress_hours=args.suppress_hours)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_dashboard_compat(args):
     return _dashboard_module().dispatch_dashboard(args)
 
@@ -200,6 +209,17 @@ def main(argv=None) -> int:
     p.add_argument("--approval-db", default=None, help="已授权工作台的审批账本")
     p.add_argument("--approval-id", default=None, help="批准的方案标识")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("patrol", help="Watchdog 离线巡查台账并追加告警 JSONL")
+    p.add_argument("--ledger", required=True)
+    p.add_argument("--alerts", required=True, help="告警 JSONL 输出（只增不改）")
+    p.add_argument("--window-days", type=int, default=None)
+    p.add_argument("--spin", type=int, default=None, help="同任务 dispatched 次数阈值，默认 3")
+    p.add_argument("--fail-streak", type=int, default=None, help="同任务失败次数阈值，默认 2")
+    p.add_argument("--executor-fail-streak", type=int, default=None, help="执行器窗口内全败阈值，默认 3")
+    p.add_argument("--burn-seconds", type=float, default=None, help="同任务累计耗时阈值秒，默认 3600")
+    p.add_argument("--suppress-hours", type=float, default=None, help="同 key 告警抑制窗口小时，默认 6")
+    p.set_defaults(func=cmd_patrol)
 
     p = sub.add_parser("dashboard", help="生成自包含运行看板 HTML")
     p.add_argument("--ledger", required=True)
