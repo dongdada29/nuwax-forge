@@ -1,0 +1,18 @@
+[
+  {
+    "id": "pr-checks-failed",
+    "match": { "source": "github-pr", "state": "OPEN", "draft": false, "checks": "failure" },
+    "kind": "triage",
+    "risk": "low",
+    "objective": "只读查看 {repo}#{number}「{title}」的 CI 失败原因，输出：失败 job 名单、根因分类（代码/账单/环境）、建议处置，不改任何文件",
+    "acceptance": ["输出失败 job 名单与根因分类", "无文件修改"]
+  },
+  {
+    "id": "pr-stale",
+    "match": { "source": "github-pr", "state": "OPEN", "draft": false, "staleDays": 3 },
+    "kind": "triage",
+    "risk": "low",
+    "objective": "只读核查 {repo}#{number}「{title}」已 {staleDays} 天无更新：列出阻塞点（等 review/等 CI/等账单），给出催办对象建议，不改任何文件",
+    "acceptance": ["输出阻塞点与催办建议", "无文件修改"]
+  }
+]
