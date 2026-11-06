@@ -10,10 +10,52 @@ VALID_KINDS = {
     "implementation", "review", "triage", "batch", "docs",
     "research", "web-verification", "platform-query",
 }
+# 模型分层（轻量模型分类路由的地基；V0 只声明不路由，分类路由等真实模型验收后再启用）
+VALID_MODEL_CLASSES = {"light", "standard", "heavy"}
 
 
 class RegistryError(ValueError):
     pass
+
+
+def _normalize_models(executor_name: str, raw_models) -> list:
+    """models 声明（可选）：[{id, class?(light/standard/heavy), contextK?, verified?, evidence?}]。
+
+    纯字符串条目视为 id 简写（class 记空=未分层，兼容旧自由格式）。
+    V0 只做声明与校验，不改路由行为；台账行执行器实际所用模型仍按 AGENTS.md 单独记录。
+    """
+    if raw_models is None:
+        return []
+    if not isinstance(raw_models, list):
+        raise RegistryError(f"{executor_name}: models 必须是数组")
+    seen = set()
+    models = []
+    for item in raw_models:
+        if isinstance(item, str):
+            item = {"id": item}
+        if not isinstance(item, dict):
+            raise RegistryError(f"{executor_name}: models 条目必须是对象或字符串")
+        model_id = item.get("id")
+        if not isinstance(model_id, str) or not model_id.strip():
+            raise RegistryError(f"{executor_name}: models[].id 必填且非空")
+        if model_id in seen:
+            raise RegistryError(f"{executor_name}: models 重名 {model_id}")
+        seen.add(model_id)
+        model_class = item.get("class", "")
+        if model_class and model_class not in VALID_MODEL_CLASSES:
+            raise RegistryError(f"{executor_name}: models[{model_id}] class 只能是 "
+                                f"{'/'.join(sorted(VALID_MODEL_CLASSES))}（省略=未分层）")
+        context_k = item.get("contextK")
+        if context_k is not None and (isinstance(context_k, bool) or not isinstance(context_k, int)
+                                      or context_k <= 0):
+            raise RegistryError(f"{executor_name}: models[{model_id}] contextK 必须是正整数")
+        if not isinstance(item.get("verified", False), bool):
+            raise RegistryError(f"{executor_name}: models[{model_id}] verified 必须是布尔")
+        models.append({"id": model_id, "class": model_class,
+                       "contextK": context_k,
+                       "verified": item.get("verified", False),
+                       "evidence": item.get("evidence", "")})
+    return models
 
 
 def load(path) -> dict:
@@ -61,6 +103,7 @@ def validate(raw: dict) -> dict:
             "costClass": cost_class,
             "costProfile": item.get("costProfile", ""),
             "dailyCap": cap,
+            "models": _normalize_models(name, item.get("models")),
             "invocation": item.get("invocation") or {},
             "evidence": item.get("evidence", ""),
         })

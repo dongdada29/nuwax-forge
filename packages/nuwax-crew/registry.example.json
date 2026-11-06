@@ -104,7 +104,23 @@
       "aliases": [
         "nuwaxcode"
       ],
-      "costClass": "subscription"
+      "costClass": "subscription",
+      "models": [
+        {
+          "id": "glm-4.7-flash",
+          "class": "light",
+          "contextK": 128,
+          "verified": false,
+          "evidence": "待真实核验（密钥轮换后）"
+        },
+        {
+          "id": "glm-4.7",
+          "class": "standard",
+          "contextK": 128,
+          "verified": false,
+          "evidence": "待真实核验（密钥轮换后）"
+        }
+      ]
     },
     {
       "name": "mimo",
@@ -143,7 +159,23 @@
         "command": "opencode run --model deepseek {brief}",
         "proposed": true
       },
-      "costClass": "api"
+      "costClass": "api",
+      "models": [
+        {
+          "id": "deepseek-chat",
+          "class": "light",
+          "contextK": 64,
+          "verified": false,
+          "evidence": "待真实核验"
+        },
+        {
+          "id": "deepseek-reasoner",
+          "class": "heavy",
+          "contextK": 64,
+          "verified": false,
+          "evidence": "待真实核验"
+        }
+      ]
     },
     {
       "name": "grok",
@@ -251,12 +283,42 @@
       "costProfile": "免费",
       "dailyCap": 200,
       "models": [
-        "glm-5.3-flash-free",
-        "deepseek-v4.1-flash-free",
-        "mimo-v2.6-flash-free",
-        "minimax-m3.1-flash-free",
-        "nemotron-3-ultra-free",
-        "beam-free"
+        {
+          "id": "glm-5.3-flash-free",
+          "class": "light",
+          "verified": false,
+          "evidence": "免费池快闪模型，未真实核验"
+        },
+        {
+          "id": "deepseek-v4.1-flash-free",
+          "class": "light",
+          "verified": false,
+          "evidence": "免费池快闪模型，未真实核验"
+        },
+        {
+          "id": "mimo-v2.6-flash-free",
+          "class": "light",
+          "verified": false,
+          "evidence": "免费池快闪模型，未真实核验"
+        },
+        {
+          "id": "minimax-m3.1-flash-free",
+          "class": "light",
+          "verified": false,
+          "evidence": "免费池快闪模型，未真实核验"
+        },
+        {
+          "id": "nemotron-3-ultra-free",
+          "class": "light",
+          "verified": false,
+          "evidence": "免费池快闪模型，未真实核验"
+        },
+        {
+          "id": "beam-free",
+          "class": "light",
+          "verified": false,
+          "evidence": "免费池快闪模型，未真实核验"
+        }
       ],
       "invocation": {
         "command": "opencode run -m opencode/glm-5.3-flash-free {brief}",
