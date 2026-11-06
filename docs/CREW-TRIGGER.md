@@ -46,4 +46,5 @@ route+dispatch（可选）：planned 的计划落台账，status=dispatched
 - **凭据**：`gh` 子进程凭 gh 自身登录态（`GH_TOKEN` 环境变量由调度入口注入，不进代码不进台账不进日志）。
 - **只触发不改状态**：V0 任务全部是只读 triage；对 PR 评论/合并等写操作属实施类，须走完整审批流。
 - **事件源**：V0 只有 GitHub PR；CI run 级事件、issue、其他平台归 V1。
+- **已知边缘（复核备注，V0 接受）**：①全 SKIPPED 的 rollup 归为 `success`（SKIPPED 不算失败；V0 规则只按 `failure` 触发，无感）；②状态文件损坏会被静默重置、同 key 可能再触发一次——接 `--ledger` 时台账 `dispatched_keys` 兜底不重复派工，只影响无台账的草稿模式。
 - **失败处理**：gh 拉取失败/超时/坏输出抛 TriggerError 退出 1，不产生半截状态。
