@@ -7,7 +7,7 @@ import json
 import sqlite3
 import sys
 
-from . import contract, dispatch, health, ledger, registry, router, runner, usage, watchdog
+from . import contract, dispatch, health, ledger, registry, router, runner, trigger, usage, watchdog
 
 VERIFY_BRIEF = {
     "taskKey": "executor-verify-mini",
@@ -146,6 +146,28 @@ def cmd_patrol(args) -> int:
                               executor_fail_streak=args.executor_fail_streak,
                               burn_seconds=args.burn_seconds, suppress_hours=args.suppress_hours)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+def cmd_trigger(args) -> int:
+    if bool(args.events) == bool(args.github):
+        print("停止：--events 与 --github 二选一", file=sys.stderr)
+        return 1
+    rules = trigger.load_rules(args.rules)
+    if args.github:
+        events = trigger.collect_github(args.github, gh_path=args.gh, limit=args.limit, timeout=args.timeout)
+    else:
+        events = json.loads(open(args.events, encoding="utf-8").read())
+    out = trigger.run(events, rules, args.state, suppress_hours=args.suppress_hours)
+    dispatched = []
+    if args.registry:
+        reg = registry.load(args.registry)
+        for task in out["tasks"]:
+            plan = router.route(task, reg,
+                                dispatched=ledger.dispatched_keys(args.ledger) if args.ledger else set(),
+                                counts=ledger.today_counts(args.ledger) if args.ledger else {})
+            if plan["status"] == "planned" and args.ledger:
+                dispatch.mark(plan, args.ledger, "dispatched")
+            dispatched.append({"taskKey": task["taskKey"], "planStatus": plan["status"]})
+    print(json.dumps({**out, "dispatched": dispatched}, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -220,6 +242,20 @@ def main(argv=None) -> int:
     p.add_argument("--burn-seconds", type=float, default=None, help="同任务累计耗时阈值秒，默认 3600")
     p.add_argument("--suppress-hours", type=float, default=None, help="同 key 告警抑制窗口小时，默认 6")
     p.set_defaults(func=cmd_patrol)
+
+    p = sub.add_parser("trigger", help="外部事件 → 规则筛选 → 任务草稿（可选 route+落账）")
+    p.add_argument("--rules", required=True)
+    p.add_argument("--state", required=True, help="触发去重状态 JSON 文件")
+    p.add_argument("--events", default=None, help="离线事件 JSON 文件（数组）")
+    p.add_argument("--github", default=None, help="owner/repo，用 gh 现场拉取开放 PR")
+    p.add_argument("--gh", default="gh", help="gh 命令路径")
+    p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--timeout", type=int, default=None, help="gh 子进程超时秒，默认 30")
+    p.add_argument("--suppress-hours", type=float, default=None, help="同 key 触发抑制窗口小时，默认 24")
+    p.add_argument("--registry", default=None, help="提供则对每个任务草稿跑 route")
+    p.add_argument("--ledger", default=None, help="与 --registry 同用：planned 的计划落台账")
+    p.set_defaults(func=cmd_trigger)
+
 
     p = sub.add_parser("dashboard", help="生成自包含运行看板 HTML")
     p.add_argument("--ledger", required=True)
