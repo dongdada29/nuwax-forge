@@ -74,6 +74,14 @@ python3 -B -m unittest discover -s tests -v         # 验证入口
 
 `registries/mbp128-20261022.json` 是工作台实况注册表在 2026-10-22 复核后的同步快照（在池 12 / 下架 7，下架原因见各条 evidence）：订阅优先、本地 pi 最前、API 计费兜底的消耗策略由 `costClass` 表达。`registry.example.json` 仍是合成示例，供测试使用；实况以工作台 `executors.json` 为准，定期快照同步到本目录。
 
+### models 声明（V0：声明不路由）
+
+执行器可声明可用模型：`models: [{id, class, contextK?, verified?, evidence?}]`，`class ∈ light/standard/heavy`（轻量模型分类路由的地基）。规则：
+
+- `id` 必填唯一；`class` 可省（省 = 未分层）；纯字符串条目视为 id 简写（兼容旧自由格式）。
+- V0 只声明与校验，**不参与路由**（分类路由等真实模型核验后启用）；台账行执行器实际所用模型仍单独记录。
+- 模型级 `verified` 与执行器级同义：未核验不进生产路由，`evidence` 写核验依据。
+
 ## 边界
 
 - 不写团队源文档、不动 IM、不改平台配置；执行器只在自己的 worktree 内写。
