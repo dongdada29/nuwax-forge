@@ -20,3 +20,5 @@ description: 使用 Nuwax Forge 进行短上下文任务派工、预算对账、
 源码完成、进程成功、预算结算、产品验收分别报告。安装不授予提交、推送、部署、平台修改或凭据访问权限。
 
 Stack 研发工作流按需调用 `node <本Skill>/scripts/forge.mjs stack module --name index`，再读取对应模块。环境/租约/上下文/退避/派工统一走 `stack runtime --command check|lease|context|backoff|dispatch|record --profile <既有profile> [--input <JSON>]`，保留同一 TaskStore、游标与预算门。内部模块不注册为独立 Skill。
+
+原生宿主每轮先按[任务推进与审批闭环](references/workflow.md)调用 `stack workflow --command sync|next`。有积压任务时先准备正式审批或执行已批准方案，再做轮换巡检；用 `submit|run|finish` 回写同一任务库。本人通过看板审批，Agent 不代批；没有真实验收不得标完成。

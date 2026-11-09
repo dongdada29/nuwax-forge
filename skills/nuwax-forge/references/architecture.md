@@ -22,3 +22,7 @@ Assignment 使用独立 `attemptId`，经历 prepared → running → reported �
 写入还需要未过期的 **TaskStore 任务租约**。当前 `task-state` CLI 没有提供获取任务租约的子命令：只有已有可信调用方通过 TaskStore `claim` 获取有效租约后才能更新 Assignment；若没有该调用方，报告未接通。`stack runtime --command lease` 是运行门自己的租约，不能冒充任务租约。
 
 此账本与 Crew JSONL 及 Forge agent state 是独立来源，当前不会自动把平台 Loop/IM、Crew 派工或 Worker 报告写入新的 Assignment，也不会自动接入身份校验或消息发送。不要因为某张本地表存在就宣称平台链路已打通。查看这些来源的操作与去重口径见 [dashboard.md](dashboard.md)。
+
+## 既有 TaskStore 的审批推进
+
+原生宿主已有任务库时，使用 [workflow](workflow.md) 的 `sync → next → submit/run/finish` 显式推进原任务。它复用原审批库、任务租约、Crew 和预算门，把等待、执行与验收检查点写回原 TaskStore；通过审批中的明确 taskRef 关联同一次尝试。它不填充新的 Trigger/Assignment，不代做审批、不自动轮询，也不发送平台消息。必须实际升级宿主 Skill、安装包与 Loop 后才能报告部署完成；隔离测试不能替代真实业务验收。

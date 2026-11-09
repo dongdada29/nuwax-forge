@@ -135,9 +135,13 @@ def task_store_tasks(path):
     out = []
     for task, encoded in rows:
         data = json.loads(encoded)
-        out.append({'source': 'stack', 'taskKey': task, 'title': data.get('objective'),
-                    'objective': data.get('objective'), 'acceptance': data.get('predicates') or [],
-                    'workspace': data.get('repo_root'), 'status': data.get('phase'),
+        out.append({'source': 'stack', 'taskKey': task, 'title': data.get('objective') or data.get('title'),
+                    'objective': data.get('objective') or data.get('title'), 'acceptance': data.get('predicates') or [],
+                    'workspace': data.get('repo_root') or data.get('repo'), 'status': data.get('phase'),
+                    'createdAt': data.get('createdAt') or data.get('created'),
+                    'updatedAt': data.get('updatedAt') or data.get('updated'),
+                    'nextAction': data.get('next_action') or data.get('nextAction'),
+                    'blocker': data.get('blocker'), 'delivery': delivery_fields(data.get('delivery', {})),
                     'events': events.get(task, [])})
     return out
 

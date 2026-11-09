@@ -237,7 +237,7 @@ def usage(raw):
     return dict(zip(('inputTokens', 'outputTokens', 'cachedInputTokens'), values), status='known', totalTokens=total)
 
 
-def dispatch(profile, request, directory):
+def dispatch(profile, request, directory, *, reserve=True):
     """Produce fixed argv for approved local plan; do not execute messages or model commands."""
     if request.get('runtime', {}).get('kind') not in KINDS:
         raise ValueError('explicit-runtime.kind-required')
@@ -286,6 +286,20 @@ def dispatch(profile, request, directory):
                    'planPath': str(plan_path), 'briefPath': str(brief),
                    'workers': [{'executor': str(a.get('executor', 'unknown'))[:128], 'role': str(a.get('role', 'unknown'))[:128],
                                 'model': str(a.get('model') or plan.get('model') or '未声明')[:150]} for a in plan['assignments'][:20]]}
+        if 'taskRef' in request:
+            ref = request['taskRef']
+            if ref != {'source': 'stack', 'taskKey': task}:
+                raise ValueError('approval-task-reference-invalid')
+            payload['taskRef'] = ref
+        if 'deliveryKind' in request:
+            if request['deliveryKind'] not in {'pull-request', 'analysis'}:
+                raise ValueError('approval-delivery-kind-invalid')
+            payload['deliveryKind'] = request['deliveryKind']
+        if 'supersedesApprovalId' in request:
+            value = request['supersedesApprovalId']
+            if not isinstance(value, str) or len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
+                raise ValueError('invalid-replacement-approval-id')
+            payload['supersedesApprovalId'] = value
         item = approvals.submit(store, payload)
         if item['status'] != 'approved':
             return {'schemaVersion': 1, 'taskKey': task, 'attemptId': attempt, 'status': 'approval-' + item['status'],
@@ -293,6 +307,10 @@ def dispatch(profile, request, directory):
         approvals.verify(store, item['id'], task=task, attempt=attempt, worktree=worktree, plan=plan_path, brief=brief)
         result['approvalId'] = item['id']
         result['argv'].extend(['--approval-db', str(store), '--approval-id', item['id']])
+        if not reserve:
+            return {'status': 'approval-approved', 'approvalId': item['id'], 'executeAllowed': False}
+    elif not reserve:
+        raise ValueError('workflow-requires-human-approval-policy')
     with locked(directory) as d:
         p = d / 'dispatch-index.json'
         index = load(p) if p.exists() else {}
@@ -301,7 +319,7 @@ def dispatch(profile, request, directory):
             if index[key]['planHash'] != result['planHash'] or index[key]['briefHash'] != result['briefHash']:
                 raise ValueError('attempt-input-changed')
             return {**index[key], 'duplicate': True, 'executeAllowed': False}
-        if any(v['taskKey'] == task for v in index.values()):
+        if any(v['taskKey'] == task and v.get('status') != 'reconciled' for v in index.values()):
             raise ValueError('task-already-prepared-reconcile-no-auto-retry')
         if len(index) >= 256:
             raise ValueError('dispatch-index-limit-reconcile-before-archive')

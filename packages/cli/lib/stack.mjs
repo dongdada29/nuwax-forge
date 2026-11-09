@@ -13,7 +13,7 @@ export function runStack(opts) {
     const file = name === 'index' ? path.join(root, 'MODULE.md') : path.join(root, 'references', name + '.md');
     process.stdout.write(fs.readFileSync(file, 'utf8')); return;
   }
-  const scripts = {runtime:'runtime_guard.py', 'task-state':'task_state.py', ledger:'ledger.py', 'im-mentions':'im_mentions.py', 'append-record':'append_record.py', 'commit-attribution':'commit_attribution.py'};
+  const scripts = {runtime:'runtime_guard.py', workflow:'workflow.py', 'task-state':'task_state.py', ledger:'ledger.py', 'im-mentions':'im_mentions.py', 'append-record':'append_record.py', 'commit-attribution':'commit_attribution.py'};
   const script = scripts[opts.subcommand];
   if (!script) throw new UsageError('Unknown Stack operation');
   // Fixed script allowlist, argv only. Existing runtime_guard owns lease/context/backoff,

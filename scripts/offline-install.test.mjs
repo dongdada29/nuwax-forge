@@ -99,7 +99,8 @@ try {
       const now = read(path.join(f.hostRoot, 'work-computer.json'));
       assert.equal(now.runtimeGuard.devkitCli, one.cli);
       assert.equal(now.runtimeGuard.devkitCrewRoot, path.join(one.release, 'node_modules', '@nuwax-ai', 'devkit-crew'));
-      const restored = structuredClone(now); restored.runtimeGuard.devkitCli = originalConfig.runtimeGuard.devkitCli; restored.runtimeGuard.devkitCrewRoot = originalConfig.runtimeGuard.devkitCrewRoot;
+      assert.equal(now.runtimeGuard.scriptPath, path.join(one.release, 'node_modules', '@nuwax-ai', 'devkit-stack', 'modules', 'stack', 'scripts', 'runtime_guard.py'));
+      const restored = structuredClone(now); delete restored.runtimeGuard.scriptPath; restored.runtimeGuard.devkitCli = originalConfig.runtimeGuard.devkitCli; restored.runtimeGuard.devkitCrewRoot = originalConfig.runtimeGuard.devkitCrewRoot;
       if (format === 'nested') {
         assert.equal(now.runtimeGuard.tools.devkitCli.path, one.cli);
         restored.runtimeGuard.tools.devkitCli.path = originalConfig.runtimeGuard.tools.devkitCli.path;
@@ -115,6 +116,10 @@ try {
     assert.deepEqual(fs.readFileSync(path.join(f.root, 'managed.json')), stateBefore);
     assert.deepEqual(snapshot(f.hostRoot, 'dir'), hostBefore);
     const two = install(host, f.root, f.hostRoot, upgraded); assert.notEqual(two.release, one.release);
+    if (host === 'nuwax') {
+      assert.equal(read(path.join(f.hostRoot, 'work-computer.json')).runtimeGuard.scriptPath,
+        path.join(two.release, 'node_modules', '@nuwax-ai', 'devkit-stack', 'modules', 'stack', 'scripts', 'runtime_guard.py'));
+    }
     assert.deepEqual(read(path.join(skill === one.skill ? two.skill : skill, 'installation.json')), binding);
     checkedDoctor(two, skill === one.skill ? two.skill : skill);
     assert.equal(action('rollback', f.root).status, 'rolled-back');
@@ -154,9 +159,11 @@ try {
     assert.equal(JSON.parse(doctor.stdout).checks.find(c => c.check === 'python').bin, python);
     const crew = invoke(['crew', 'route', '--help']); assert.equal(crew.status, 0, crew.stderr); assert.match(crew.stdout, /crew route/);
     const stack = invoke(['stack', 'runtime', '--command', 'check']); assert.notEqual(stack.status, 0); assert.match(stack.stderr, /profile/);
+    const workflow = invoke(['stack', 'workflow', '--command', 'next']); assert.notEqual(workflow.status, 0); assert.match(workflow.stderr, /profile/);
     const calls = fs.readFileSync(marker, 'utf8').trim().split('\n').map(line => JSON.parse(line));
     assert.ok(calls.some(args => args.includes('crew.cli')));
     assert.ok(calls.some(args => args.some(arg => arg.endsWith('runtime_guard.py'))));
+    assert.ok(calls.some(args => args.some(arg => arg.endsWith('workflow.py'))));
     action('uninstall', f.root);
   });
 

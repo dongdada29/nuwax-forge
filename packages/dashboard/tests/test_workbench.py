@@ -23,6 +23,45 @@ from forge_dashboard.workbench import build_workbench, source_health, timestamp
 
 
 class TaskProjectionTests(unittest.TestCase):
+    def test_native_payload_dates_and_decisions_visible_without_fake_events_or_mtime(self):
+        with tempfile.TemporaryDirectory() as td:
+            path=Path(td)/'tasks.sqlite'
+            with sqlite3.connect(path) as db:
+                db.execute('CREATE TABLE tasks (id TEXT PRIMARY KEY,payload TEXT)')
+                for key,payload in [('new',{'objective':'new task','phase':'queued','created':'2026-11-09T07:05:00Z'}),
+                                    ('decision',{'title':'need scope','phase':'needs-decision','updated':'2026-11-08T10:00:00Z'}),
+                                    ('unknown',{'objective':'unknown date','phase':'queued','created':'2026-11-09'})]:
+                    db.execute('INSERT INTO tasks VALUES(?,?)',(key,json.dumps(payload)))
+            before=path.read_bytes()
+            tasks={t['taskKey']:t for t in build_workbench([],tasks=sources.task_store_tasks(path))}
+            self.assertEqual(tasks['new']['lastAt'],'2026-11-09T07:05:00Z')
+            self.assertEqual(tasks['new']['events'],[])
+            self.assertEqual(tasks['new']['attemptCount'],0)
+            self.assertEqual(tasks['decision']['state'],'decision')
+            self.assertEqual(tasks['decision']['title'],'need scope')
+            self.assertIsNone(tasks['unknown']['lastAt'])
+            self.assertEqual(path.read_bytes(),before)
+
+    def test_explicit_approval_reference_joins_native_task_and_exact_crew_attempt(self):
+        meta={'source':'stack','taskKey':'native','status':'waiting'}
+        approval={'taskKey':'native','attemptId':'a1','status':'pending','taskRef':{'source':'stack','taskKey':'native'}}
+        records=[{'source':'crew','taskKey':'native','attemptId':'a1','status':'completed'},
+                 {'source':'crew','taskKey':'native','attemptId':'unrelated','status':'failed'}]
+        tasks=build_workbench(records,tasks=[meta],approvals=[approval])
+        self.assertEqual(len(tasks),2)
+        native=next(t for t in tasks if t['source']=='stack')
+        self.assertEqual(native['state'],'approval')
+        self.assertEqual(native['attemptCount'],1)
+        self.assertEqual(native['attempts'][0]['attemptId'],'a1')
+        self.assertEqual(next(t for t in tasks if t['source']=='crew')['attempts'][0]['attemptId'],'unrelated')
+
+    def test_conflicting_approval_links_never_guess_the_native_parent(self):
+        refs=[{'taskKey':'worker','attemptId':'a1','status':'pending','taskRef':{'source':'stack','taskKey':key}} for key in ['one','two']]
+        tasks=build_workbench([{'source':'crew','taskKey':'worker','attemptId':'a1','status':'completed'}],approvals=refs)
+        crew=next(t for t in tasks if t['source']=='crew')
+        self.assertEqual(len(crew['attempts']),1)
+        self.assertTrue(all(not t['attempts'] for t in tasks if t['source']=='stack'))
+
     def test_explicit_task_identity_groups_attempts_but_never_guesses_across_sources(self):
         records = [
             {'source': 'crew', 'taskKey': 'NW-1', 'attemptId': 'a', 'status': 'failed', 'at': '2026-11-04T00:00:00Z'},

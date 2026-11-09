@@ -25,7 +25,7 @@ const COMMANDS = {
   }, run: runBotCommand },
   'dsh-plugin': { subcommands: ['add', 'remove', 'inspect', 'run'], flags: { profile: 'value', package: 'value', binary: 'value', 'startup-binding': 'value' }, run: runDshPlugin },
   dashboard: { flags: { alerts: 'value', ledger: 'value', registry: 'value', health: 'value', matrix: 'value', 'task-store': 'value', 'agent-state': 'value', 'agent-state-root': 'value', 'host-budget': 'value', 'approval-store': 'value', 'personal-agent-snapshot': 'value', 'embed-origin': 'value', out: 'value', serve: 'boolean', port: 'value', 'refresh-seconds': 'value', python: 'value' }, run: runDashboard },
-  stack: { subcommands: ['module', 'runtime', 'task-state', 'ledger', 'im-mentions', 'append-record', 'commit-attribution'], flags: { name: 'value', command: 'value', profile: 'value', input: 'value', dns: 'value', owner: 'value', action: 'value', seconds: 'value' }, run: runStack },
+  stack: { subcommands: ['module', 'runtime', 'workflow', 'task-state', 'ledger', 'im-mentions', 'append-record', 'commit-attribution'], flags: { name: 'value', command: 'value', profile: 'value', input: 'value', dns: 'value', owner: 'value', action: 'value', seconds: 'value' }, run: runStack },
   agent: { subcommands: ['doctor', 'prepare', 'run', 'reconcile', 'start', 'status', 'cancel'],
     flags: { runtime: 'value', binary: 'value', spec: 'value', state: 'value', 'brief-file': 'value', json: 'boolean' }, run: runAgent },
   help: { run: runHelp },

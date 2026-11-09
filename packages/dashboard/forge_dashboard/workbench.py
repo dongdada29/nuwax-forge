@@ -16,15 +16,15 @@ from .sources import delivery_fields
 STATES = {
     'pending': '待处理', 'approval': '待审批', 'running': '运行待核实',
     'review': '待验收', 'blocked': '阻塞 / 失败', 'done': '来源标记已验证',
-    'other': '其他',
+    'decision': '待决策', 'other': '其他',
 }
-RUNNING = {'dispatched', 'running', 'in_progress', 'claimed', 'analyzing', 'implementing', 'verifying'}
+RUNNING = {'dispatched', 'running', 'in_progress', 'in-progress', 'claimed', 'analyzing', 'implementing', 'verifying'}
 REVIEW = {'completed', 'success', 'succeeded', 'reported', 'in_review',
           'merged-needs-acceptance', 'released-await-verify',
           'test-verified-web-sample-pending', 'mac-verified-win-pending',
           'verified-live-partial', 'verified-web-partial'}
 DONE = {'done', 'done-verified-web', 'verified-live', 'triaged-a-closed-verified'}
-PENDING = {'queued', 'prepared', 'pending', 'pending-triage', 'plan-only', 'pending-decision', 'todo'}
+PENDING = {'queued', 'prepared', 'pending', 'pending-triage', 'plan-only', 'todo', 'static-done-pending-runtime-repro'}
 BLOCKED = {'blocked', 'failed'}
 
 
@@ -83,6 +83,7 @@ def _status_note(task):
 
 
 def state_for(status):
+    if status in {'needs-decision', 'pending-decision'}: return 'decision'
     if status in RUNNING: return 'running'
     if status in REVIEW: return 'review'
     if status in DONE: return 'done'
@@ -96,6 +97,26 @@ def state_for(status):
 def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
     """Project explicit metadata, attempts and events without mutating a store."""
     groups = {}
+    # A hash-bound approval payload explicitly links this exact Crew attempt to a
+    # native task. Never join sources merely because their names/keys look alike.
+    links = {}
+    for item in approvals or ():
+        ref = item.get('taskRef')
+        if not isinstance(ref,dict) or not all(identifier(ref.get(k)) for k in ('source','taskKey')):
+            continue
+        key = (identifier(item.get('taskKey')),identifier(item.get('attemptId')))
+        if not all(key): continue
+        target = (ref['source'],ref['taskKey'])
+        links[key] = target if key not in links or links[key] == target else None
+
+    def linked_reference(item):
+        explicit = item.get('taskRef')
+        if isinstance(explicit,dict) and all(identifier(explicit.get(k)) for k in ('source','taskKey')):
+            return reference(item)
+        if item.get('source','crew') == 'crew':
+            target = links.get((identifier(item.get('taskKey')),identifier(item.get('attemptId'))))
+            if target: return target
+        return reference(item)
 
     def get(source, key, *, observation=None):
         if not key:
@@ -116,6 +137,13 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
         task.update(title=text(item.get('title')) or key, objective=text(item.get('objective'), 4096),
                     workspace=text(item.get('workspace')))
         _source_status(task, item, identifier(item.get('source')) or source)
+        dates = [item.get(k) for k in ('updatedAt','createdAt') if timestamp(item.get(k)) is not None]
+        if dates:
+            # Explicit source metadata, never filesystem mtime or a fake attempt.
+            task['metadataAt'] = max(dates,key=timestamp)
+        task['nextAction'] = text(item.get('nextAction'))
+        task['blocker'] = text(item.get('blocker'))
+        task['delivery'] = delivery_fields(item.get('delivery',{}))
         task['deliveryStatus'] = text(item.get('deliveryStatus'))
         task['acceptance'] = [text(p, 1000) for p in item.get('acceptance', []) if isinstance(p, str)]
         task['events'].extend(item.get('events') or [])
@@ -132,7 +160,7 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
             task['events'].append({'status': task['status'], 'summary': evidence, 'source': 'matrix', 'at': item.get('updatedAt')})
 
     for index, record in enumerate(records):
-        source, key = reference(record)
+        source, key = linked_reference(record)
         # Missing task IDs stay separate observations rather than one "unknown" task.
         task = get(source, key or f'未关联记录 {index + 1}', observation=index if not key else None)
         task['attempts'].append(record)
@@ -146,7 +174,8 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
 
     for item in approvals or ():
         # These approvals are produced by Crew and explicitly carry its taskKey.
-        task = get('crew', identifier(item.get('taskKey')))
+        source,key = linked_reference({**item,'source':'crew'})
+        task = get(source,key)
         if task is None: continue
         task['approvals'].append(item)
         if task['title'] == task['taskKey']:
@@ -167,6 +196,8 @@ def build_workbench(records, *, matrix=(), approvals=(), tasks=()):
         dated = [e for e in task['events'] if timestamp(e.get('at')) is not None]
         if dated:
             task['lastAt'] = max(dated, key=lambda e: timestamp(e['at']))['at']
+        if timestamp(task.get('metadataAt')) is not None and (timestamp(task['lastAt']) is None or timestamp(task['metadataAt']) > timestamp(task['lastAt'])):
+            task['lastAt'] = task['metadataAt']
         # Array/source order is a fallback only within one source, never a global clock.
         latest = max(enumerate(attempts), key=lambda pair: (timestamp(pair[1].get('at')) or 0, pair[0]))[1] if attempts else {}
         task['latestAttempt'] = {key: latest.get(key) for key in ('source', 'attemptId', 'executor', 'status', 'at')} if latest else None
