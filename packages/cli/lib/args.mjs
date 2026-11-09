@@ -2,6 +2,7 @@
 export class UsageError extends Error {}
 
 export const USAGE = `用法：
+  nuwax-forge crew <route|patrol|trigger|usage|ledger|health|verify> [参数；子命令 --help 查看]
   nuwax-forge stack module --name <runtime-guard|triage|autonomous-run|...>
   nuwax-forge stack runtime --command <check|lease|context|backoff|dispatch|record> --profile <profile.json> [--input <JSON>]
   nuwax-forge stack task-state --command <trigger-record|trigger-read|ticket-admit|ticket-read|assignment-prepare|assignment-start|assignment-report|assignment-finish> --input <JSON 文件>
@@ -16,6 +17,7 @@ export const USAGE = `用法：
   nuwax-forge agent doctor --runtime <codex|deepseek-harness> [--binary <可信绝对路径>] --json
   nuwax-forge agent prepare --spec <agent JSON> --brief-file <短任务书> --state <新仓外目录>
   nuwax-forge agent [run|reconcile] --state <已准备仓外目录>
+  nuwax-forge agent [start|status|cancel] --state <同一已准备仓外目录>
   nuwax-forge init --project <外部项目目录> --recipe <仓内相对配方路径>
   nuwax-forge verify --project <外部项目目录> --state <仓外状态目录> --task-key <任务键>
                       [--node <可信node绝对路径>] [--python <python解释器>] [--reuse]

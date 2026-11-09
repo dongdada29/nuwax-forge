@@ -14,17 +14,19 @@ import { runAgent } from '../lib/agent/index.mjs';
 import { runPlan } from '../lib/run.mjs';
 import { runDashboard } from '../lib/dashboard.mjs';
 import { runDshPlugin } from '../lib/dsh-plugin.mjs';
+import { parseCrewArgs, runCrew } from '../lib/crew.mjs';
 import { parseBotArgs, runBotCommand } from '../lib/bots/entry.mjs';
 import { parseArgs, UsageError, USAGE } from '../lib/args.mjs';
 
 const COMMANDS = {
+  crew: { parse: parseCrewArgs, run: runCrew },
   bots: { parse: argv => {
     try { return parseBotArgs(argv); } catch (error) { throw new UsageError(error.message); }
   }, run: runBotCommand },
-  'dsh-plugin': { subcommands: ['add', 'remove', 'inspect', 'run'], flags: { profile: 'value', package: 'value', binary: 'value' }, run: runDshPlugin },
-  dashboard: { flags: { ledger: 'value', registry: 'value', health: 'value', matrix: 'value', 'task-store': 'value', 'agent-state': 'value', 'agent-state-root': 'value', 'host-budget': 'value', 'approval-store': 'value', 'personal-agent-snapshot': 'value', 'embed-origin': 'value', out: 'value', serve: 'boolean', port: 'value', 'refresh-seconds': 'value', python: 'value' }, run: runDashboard },
+  'dsh-plugin': { subcommands: ['add', 'remove', 'inspect', 'run'], flags: { profile: 'value', package: 'value', binary: 'value', 'startup-binding': 'value' }, run: runDshPlugin },
+  dashboard: { flags: { alerts: 'value', ledger: 'value', registry: 'value', health: 'value', matrix: 'value', 'task-store': 'value', 'agent-state': 'value', 'agent-state-root': 'value', 'host-budget': 'value', 'approval-store': 'value', 'personal-agent-snapshot': 'value', 'embed-origin': 'value', out: 'value', serve: 'boolean', port: 'value', 'refresh-seconds': 'value', python: 'value' }, run: runDashboard },
   stack: { subcommands: ['module', 'runtime', 'task-state', 'ledger', 'im-mentions', 'append-record', 'commit-attribution'], flags: { name: 'value', command: 'value', profile: 'value', input: 'value', dns: 'value', owner: 'value', action: 'value', seconds: 'value' }, run: runStack },
-  agent: { subcommands: ['doctor', 'prepare', 'run', 'reconcile'],
+  agent: { subcommands: ['doctor', 'prepare', 'run', 'reconcile', 'start', 'status', 'cancel'],
     flags: { runtime: 'value', binary: 'value', spec: 'value', state: 'value', 'brief-file': 'value', json: 'boolean' }, run: runAgent },
   help: { run: runHelp },
   doctor: { flags: { json: 'boolean' }, run: opts => runDoctor(opts) },

@@ -25,7 +25,8 @@ function members(pid, known, inspect) {
 export async function supervise(command, options = {}) {
   const { cwd, env, stdin = '', onStdout = () => {}, onStderr = () => {}, wallMs = 1000,
     graceMs = 250, pollMs = 20, detached = true,
-    signalProcess = process.kill.bind(process), inspectProcesses = processTable } = options;
+    signalProcess = process.kill.bind(process), inspectProcesses = processTable,
+    stopRequested = () => false } = options;
   const began = performance.now(), known = new Set(), signals = [], cleanupErrors = [];
   let child, closed = false, exited = false, code = null, signal = null, launchError = null, stopReason = null;
   const stop = reason => { stopReason ??= reason; };
@@ -65,6 +66,7 @@ export async function supervise(command, options = {}) {
     child.stderr.on('data', chunk => { try { onStderr(chunk, stop); } catch { stop('stderr-handler-failed'); } });
     process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
     while (!closed && !exited && !launchError && !stopReason) {
+      if (stopRequested()) { stop('cancelled'); break; }
       if (performance.now() - began >= wallMs) { stop('wall-timeout'); break; }
       await pause(pollMs);
       // Remember descendants while the leader is still present, including ones

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from . import contract, registry
+from copy import deepcopy
 
 FIXED_ROUTES = {"web-verification": "ego-browser", "platform-query": "nuwax-a2a"}
 
@@ -56,7 +57,7 @@ def _eligible(reg: dict, kind: str, counts: dict, used_names: set, allow_unverif
     return out
 
 
-def route(task: dict, reg: dict, *, dispatched: set | None = None, counts: dict | None = None,
+def _route(task: dict, reg: dict, *, dispatched: set | None = None, counts: dict | None = None,
           force: bool = False, allow_unverified: bool = False, blocked: dict | None = None) -> dict:
     brief = contract.validate(task)
     counts = counts or {}
@@ -146,3 +147,35 @@ def route(task: dict, reg: dict, *, dispatched: set | None = None, counts: dict 
 
     return {**metadata, "taskKey": brief["taskKey"], "status": "planned", "assignments": assignments,
             "fallbacks": fallbacks, "warnings": warnings, "acceptance": brief["acceptance"]}
+
+
+def route(task: dict, reg: dict, **options) -> dict:
+    """Optionally bind a verified model class through an explicit argv placeholder."""
+    brief = contract.validate(task)
+    policy = reg.get('routing', {}).get('modelClasses', {})
+    if not isinstance(policy, dict) or any(
+            kind not in registry.VALID_KINDS or value not in registry.VALID_MODEL_CLASSES
+            for kind, value in policy.items()):
+        raise contract.ContractError('routing.modelClasses 必须映射任务类型到 light/standard/heavy')
+    desired = policy.get(brief['kind'])
+    if desired is None:
+        return _route(task, reg, **options)
+    selected = {}
+    candidates = []
+    for executor in reg['executors']:
+        models = [m for m in executor.get('models', [])
+                  if m.get('verified') and m.get('class') == desired
+                  and (not brief.get('model') or m['id'] == brief['model'])]
+        argv = executor.get('invocation', {}).get('argv')
+        if not models or not isinstance(argv, list) or '{model}' not in argv:
+            continue
+        model = models[0]['id']
+        candidate = deepcopy(executor)
+        candidate['invocation']['argv'] = [model if arg == '{model}' else arg for arg in argv]
+        selected[executor['name']] = model
+        candidates.append(candidate)
+    plan = _route(task, {**reg, 'executors': candidates}, **options)
+    for assignment in [*plan['assignments'], *plan['fallbacks']]:
+        assignment['model'] = selected[assignment['executor']]
+        assignment['modelClass'] = desired
+    return plan

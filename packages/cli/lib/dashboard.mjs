@@ -11,7 +11,7 @@ export function runDashboard(opts) {
   const dashboard = resolvePackage('@nuwax-ai/devkit-dashboard');
   if (!dashboard) throw new Error('未找到同安装 @nuwax-ai/devkit-dashboard');
   const args = ['-B', '-m', 'forge_dashboard'];
-  for (const key of ['ledger', 'registry', 'health', 'matrix', 'task-store', 'agent-state', 'agent-state-root', 'host-budget', 'approval-store', 'personal-agent-snapshot', 'embed-origin', 'out', 'port', 'refresh-seconds']) {
+  for (const key of ['alerts', 'ledger', 'registry', 'health', 'matrix', 'task-store', 'agent-state', 'agent-state-root', 'host-budget', 'approval-store', 'personal-agent-snapshot', 'embed-origin', 'out', 'port', 'refresh-seconds']) {
     if (opts[key]) args.push('--' + key, opts[key]);
   }
   if (opts.serve) args.push('--serve');

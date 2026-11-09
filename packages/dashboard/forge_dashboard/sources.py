@@ -3,6 +3,29 @@ import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from collections import deque
+
+
+def watchdog_alerts(path):
+    """Read a bounded explicit alert stream, validating every record before display."""
+    file = Path(path)
+    if not file.exists():
+        return []
+    if file.stat().st_size > 8 * 1024 * 1024:
+        raise ValueError('巡查告警文件超过 8 MiB，请归档后重试')
+    rows = deque(maxlen=200)
+    with file.open(encoding='utf-8') as stream:
+        for line in stream:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if (not isinstance(row, dict) or row.get('kind') != 'crew-watchdog-alert'
+                    or row.get('schemaVersion') != 1
+                    or not all(isinstance(row.get(key), str) and 0 < len(row[key]) <= 2048
+                               for key in ('ts', 'rule', 'subject', 'severity'))):
+                raise ValueError('巡查告警格式无效')
+            rows.append({key: row[key] for key in ('ts', 'rule', 'subject', 'severity')})
+    return list(rows)
 
 
 def _tokens(value):

@@ -1,6 +1,6 @@
 # Trigger V0：外部事件 → 任务草稿
 
-`crew trigger` 把外部事件（V0：GitHub 开放 PR 状态）按规则筛成 crew 任务草稿，可直接走 `router.route` 派工落台账。纯函数筛事件、零模型、零第三方依赖；**不常驻、不轮询**——每次执行是一次性调用，由调度入口（cron / Bot / 手动）驱动。设计与边界见本文，实现 [trigger.py](../packages/nuwax-crew/crew/trigger.py)。
+`crew trigger` 把外部事件（V0：GitHub 开放 PR 状态）按规则筛成 crew 任务草稿，可走 `router.route` 生成完整执行计划。纯函数筛事件、零模型、零第三方依赖；**不常驻、不轮询**——每次执行是一次性调用，由调度入口（cron / Bot / 手动）驱动。设计与边界见本文，实现 [trigger.py](../packages/nuwax-crew/crew/trigger.py)。
 
 ## 使用
 
@@ -10,7 +10,7 @@ python3 -B -m crew.cli trigger \
   --rules  packages/nuwax-crew/trigger-rules.example.json \
   --state  path/to/trigger-state.json \
   --events path/to/events.json \
-  --registry registry.json --ledger ledger.jsonl   # 可选：route + 落台账
+  --registry registry.json --ledger ledger.jsonl   # 可选：route + 读取去重/配额
 
 # gh 现场拉取（凭据由 gh 自管，本模块不读不传 token）
 python3 -B -m crew.cli trigger \
@@ -26,7 +26,7 @@ gh pr list --json … 一次性子进程调用          （或离线 events JSON
         ↓ collect_github：归一化为事件行 {source,repo,number,title,isDraft,state,updatedAt,rollup}
 screen：事件 × 规则 → 任务草稿（task 形状即 router.route 输入，附 sourceEvent）
 dedup ：按 taskKey 抑制窗口（默认 24h）去重，状态 JSON 落盘（30 天剪枝）
-route+dispatch（可选）：planned 的计划落台账，status=dispatched
+route（可选）：返回 plans，执行仍由受管 run 入口记录真实派工
 ```
 
 ## 规则（trigger-rules.example.json）
@@ -48,3 +48,7 @@ route+dispatch（可选）：planned 的计划落台账，status=dispatched
 - **事件源**：V0 只有 GitHub PR；CI run 级事件、issue、其他平台归 V1。
 - **已知边缘（复核备注，V0 接受）**：①全 SKIPPED 的 rollup 归为 `success`（SKIPPED 不算失败；V0 规则只按 `failure` 触发，无感）；②状态文件损坏会被静默重置、同 key 可能再触发一次——接 `--ledger` 时台账 `dispatched_keys` 兜底不重复派工，只影响无台账的草稿模式。
 - **失败处理**：gh 拉取失败/超时/坏输出抛 TriggerError 退出 1，不产生半截状态。
+
+## 公共入口
+
+安装版支持 `nuwax-forge crew trigger`，参数与上面的 Python 入口一致。输出中的 `plans` 保存完整路由计划，`dispatched` 在此阶段为空。调度宿主须经既有预算和审批门调用 run 后，以执行回执记录派工。

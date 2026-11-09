@@ -38,6 +38,7 @@ export function readStartupBinding(file) {
 }
 
 export function runDshPlugin(opts) {
+  opts = { ...opts, startupBinding: opts['startup-binding'] ?? opts.startupBinding };
   const args = dshPluginArgv(opts);
   const binding = opts.startupBinding !== undefined ? readStartupBinding(opts.startupBinding) : null;
   const result = spawnSync(opts.binary || 'dsh', args, { stdio: 'inherit', shell: false });

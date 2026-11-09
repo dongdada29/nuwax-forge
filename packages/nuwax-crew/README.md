@@ -87,3 +87,7 @@ python3 -B -m unittest discover -s tests -v         # 验证入口
 - 不写团队源文档、不动 IM、不改平台配置；执行器只在自己的 worktree 内写。
 - 不跨执行器共享凭据；注册表不含密钥。
 - 路由结果是建议计划，最终执行与验收责任在调度入口。
+
+## 按模型分层路由
+
+注册表可设置 `routing.modelClasses`，例如 `{"triage":"light","implementation":"heavy"}`。对应执行器必须登记同类且 `verified:true` 的模型，并在 `invocation.argv` 使用独立的 `"{model}"` 参数。route 将选中的模型绑定到实际 argv 和 assignment.model，随后沿用执行预算校验。任务显式提供 model 时也必须匹配。未配置分层策略时沿用现有执行器路由。

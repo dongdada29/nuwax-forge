@@ -70,3 +70,11 @@ Codex 的 turn.completed.usage.input_tokens 已含缓存子集，缓存不能再
 结果拆开记录 processPassed、agentCompleted、budgetPassed、acceptancePassed。只有前三项通过才 `status:completed`，`acceptancePassed` 始终 null；产品验收需消费者另行提供确定性验证。退出码：0=doctor 支持/prepare 完成/本次执行及预算完成，1=执行或结算失败，2=用法/路径/重复运行错误，3=blocked/版本不支持。
 
 本次业务功能验证覆盖真实安装 CLI 的 doctor/prepare/DSH patch 组合，以及本地 marker 子进程的完整 dispatch、结算、拒绝、超时、TERM 成功不 KILL、EPERM 探针阻断和清理拒绝有界返回路径。validationBusinessModelCalls=0 仅说明这些验证没有调用业务模型；实现执行器本身的模型 usage 未在这里聚合。**未做付费模型 smoke、产品/GUI 验收或性能对比**；doctor 不证明授权可用，也不证明模型任务已完成。
+
+## 后台执行
+
+prepare 通过后，可使用 `agent start --state <同一目录>` 启动一次后台执行。返回任务句柄后，宿主可继续处理会话，用 `agent status --state <同一目录>` 查询原 manifest、取消请求与心跳。
+
+`agent cancel --state <同一目录>` 持久化取消请求，原有 bounded supervisor 清理自有执行进程并结算。取消请求与最终 cancelled 状态分别返回，调用方应查询终态。job.claim 与 run.claim 保留单次执行约束，进程中断后通过原状态与 reconcile 核对结果。心跳超时表示需要核查。
+
+本机授权入口继续使用 prepare 生成的明确 runtime、权限与预算。Bot 提交和人工审批沿用各自已配置的入口。
