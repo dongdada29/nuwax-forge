@@ -24,3 +24,7 @@ export const BOT_FILES = Object.freeze({
 });
 
 export const BOT_PROFILE = 'forge-bots';
+
+// Artifact identity remains stable for existing managed teams. Host compatibility
+// is tracked separately so extending the tested hosts does not invalidate roots.
+export const BOT_DSH_VERSIONS = Object.freeze(['0.2.1-rc.5', '0.2.2-rc.1']);

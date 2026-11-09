@@ -14,6 +14,19 @@ def reg_with(models) -> dict:
 
 
 class ModelsDeclarationTest(unittest.TestCase):
+    def test_opt_in_class_binds_verified_model_in_argv(self):
+        from crew import router
+        raw = reg_with([{'id': 'small', 'class': 'light', 'verified': True},
+                        {'id': 'large', 'class': 'heavy', 'verified': True}])
+        raw['routing'] = {'modelClasses': {'triage': 'light'}}
+        raw['executors'][0]['invocation'] = {'argv': ['client', '--model', '{model}'], 'proposed': False}
+        task = {'taskKey': 't', 'kind': 'triage', 'risk': 'low', 'objective': 'inspect'}
+        plan = router.route(task, registry.validate(raw))
+        self.assertEqual(plan['assignments'][0]['command'], ['client', '--model', 'small'])
+        self.assertEqual(plan['assignments'][0]['model'], 'small')
+        raw['executors'][0]['models'][0]['verified'] = False
+        self.assertEqual(router.route(task, registry.validate(raw))['status'], 'unroutable')
+
     def test_example_registry_loads_with_models(self):
         reg = registry.load(ROOT / "registry.example.json")
         by_name = {e["name"]: e for e in reg["executors"]}

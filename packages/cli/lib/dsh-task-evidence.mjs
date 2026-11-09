@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { BOT_DSH_VERSIONS } from './bots/pin.mjs';
 
 export const MAX_REPORT_BYTES = 32768;
 export const DSH_RUNTIME_VERSION = '0.2.1-rc.5';
@@ -9,7 +10,7 @@ const keys = (x, names) => plain(x) && Object.keys(x).sort().join(',') === [...n
 const string = x => typeof x === 'string' && x.trim().length > 0 && x.length <= 256 && !/[\x00-\x1f\x7f]/.test(x);
 const bindingKeys = ['schemaVersion', 'taskRef', 'attemptId', 'runId', 'invocationId', 'targetEntryIds', 'runtimeVersion', 'reportPath'];
 export function validateBinding(b) {
-  if (!keys(b, bindingKeys) || b.schemaVersion !== 1 || b.runtimeVersion !== DSH_RUNTIME_VERSION ||
+  if (!keys(b, bindingKeys) || b.schemaVersion !== 1 || !BOT_DSH_VERSIONS.includes(b.runtimeVersion) ||
       !keys(b.taskRef, ['source', 'taskKey']) || !string(b.taskRef.source) || !/^[^:\s]+:[^\s]+$/.test(b.taskRef.source) || !string(b.taskRef.taskKey) ||
       !['attemptId', 'runId'].every(k => string(b[k])) || !/^[a-f0-9]{32,128}$/.test(b.invocationId) ||
       !Array.isArray(b.targetEntryIds) || !b.targetEntryIds.length || b.targetEntryIds.length > 64 ||

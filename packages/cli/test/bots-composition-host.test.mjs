@@ -24,7 +24,7 @@ test('public prepare/check/run compose the native bridge on real DSH and restart
   };
   const prepared = command(['prepare', ...common, '--forge-config', f.configPath, '--json',
     ...(process.env.FORGE_BOT_TEST_TARBALL ? ['--tarball', process.env.FORGE_BOT_TEST_TARBALL] : [])]);
-  assert.equal(prepared.bridge.enabled, true); assert.equal(prepared.package.originalFilesVerified, 7);
+  assert.equal(prepared.bridge.enabled, true); assert.equal(prepared.package.originalFilesVerified, prepared.dshVersion === '0.2.2-rc.1' ? 6 : 7);
   assert.equal(prepared.acceptance.host, 'not-run');
   assert.equal(command(['plan', ...common, '--json']).bridge.configHash, prepared.bridge.configHash);
   assert.equal(command(['check', ...common, '--json']).bridge.configHash, prepared.bridge.configHash);
@@ -102,7 +102,7 @@ test('public prepare/check/run compose the native bridge on real DSH and restart
   assert.throws(() => checkBot({ root, binary }), /config drifted/);
   assert.equal(fs.existsSync(path.join(root, '.forge-bots-lock')), false);
   assert.equal(fs.existsSync(f.dispatched), false);
-  t.diagnostic(JSON.stringify({ publicPrepareCheck: 'passed', nativeWebRestarts: 2, originalDsBotFiles: 7, nativeRegistry: result,
+  t.diagnostic(JSON.stringify({ publicPrepareCheck: 'passed', nativeWebRestarts: 2, originalDsBotFiles: prepared.package.originalFilesVerified, nativeRegistry: result,
     cliVersionRelocation: 'passed', boundRuntimeRetained: true, chiefIdRetained: true,
     configDrift: 'refused', originalBotRow: 'unchanged', credentialsImported: false, browserRendering: 'not-tested', chiefModelToolChoice: 'not-tested' }));
 });

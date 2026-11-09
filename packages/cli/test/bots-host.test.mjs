@@ -61,7 +61,7 @@ test('real DSH mounts original client/Chief, persists Bots/groups, and refuses i
   const prepared = await prepareBot(options);
   assert.equal(prepared.acceptance.installation, 'verified');
   assert.equal(prepared.acceptance.host, 'not-run');
-  assert.equal(prepared.package.originalFilesVerified, 7);
+  assert.equal(prepared.package.originalFilesVerified, prepared.dshVersion === '0.2.2-rc.1' ? 6 : 7);
   assert.equal(existsSync(join(prepared.paths.dshHome, '.credentials.yaml')), false);
   // Re-running prepare checks its root, rather than resetting native profiles/data.
   assert.equal((await prepareBot(options)).acceptance.composition, 'verified');

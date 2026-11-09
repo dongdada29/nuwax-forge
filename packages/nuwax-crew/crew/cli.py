@@ -157,17 +157,15 @@ def cmd_trigger(args) -> int:
     else:
         events = json.loads(open(args.events, encoding="utf-8").read())
     out = trigger.run(events, rules, args.state, suppress_hours=args.suppress_hours)
-    dispatched = []
+    planned = []
     if args.registry:
         reg = registry.load(args.registry)
         for task in out["tasks"]:
             plan = router.route(task, reg,
                                 dispatched=ledger.dispatched_keys(args.ledger) if args.ledger else set(),
                                 counts=ledger.today_counts(args.ledger) if args.ledger else {})
-            if plan["status"] == "planned" and args.ledger:
-                dispatch.mark(plan, args.ledger, "dispatched")
-            dispatched.append({"taskKey": task["taskKey"], "planStatus": plan["status"]})
-    print(json.dumps({**out, "dispatched": dispatched}, ensure_ascii=False, indent=2))
+            planned.append(plan)
+    print(json.dumps({**out, "plans": planned, "dispatched": []}, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -253,7 +251,7 @@ def main(argv=None) -> int:
     p.add_argument("--timeout", type=int, default=None, help="gh 子进程超时秒，默认 30")
     p.add_argument("--suppress-hours", type=float, default=None, help="同 key 触发抑制窗口小时，默认 24")
     p.add_argument("--registry", default=None, help="提供则对每个任务草稿跑 route")
-    p.add_argument("--ledger", default=None, help="与 --registry 同用：planned 的计划落台账")
+    p.add_argument("--ledger", default=None, help="与 --registry 同用，读取已有执行去重和配额")
     p.set_defaults(func=cmd_trigger)
 
 
@@ -261,6 +259,7 @@ def main(argv=None) -> int:
     p.add_argument("--ledger", required=True)
     p.add_argument("--registry", required=True)
     p.add_argument("--health", default=None)
+    p.add_argument("--alerts", default=None)
     p.add_argument("--matrix", default=None)
     p.add_argument("--task-store", default=None, help="Stack tasks.sqlite，只读")
     p.add_argument("--agent-state", default=None, help="Forge agent 单次运行 state 目录，只读")

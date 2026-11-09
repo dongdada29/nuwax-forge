@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as pause } from 'node:timers/promises';
 import { Observation, dshPatch, command, environment } from '../lib/agent/adapters.mjs';
 const bin = fileURLToPath(new URL('../bin/nuwax-devkit.mjs', import.meta.url));
 const read = p => JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -34,6 +35,8 @@ if(args.includes('--help')) {console.log('--json --ephemeral --ignore-user-confi
 if (${JSON.stringify(kind)} === 'codex' && args.some(arg => /^model_providers[.]openai(?:[.=]|$)/.test(arg))) {
   console.error('model_providers contains reserved built-in provider IDs: openai'); process.exit(1);
 }
+
+
 fs.appendFileSync(${JSON.stringify(marker)},'dispatch\\n');
 for await (const chunk of process.stdin) {}
 ${hang === true ? '' : `for(const event of ${JSON.stringify(events)}) console.log(JSON.stringify(event));`}
@@ -263,4 +266,37 @@ test('lifecycle: cleanup permission changes after probe still return failed mani
     assert.equal(out.processPassed, false); assert.equal(out.acceptancePassed, null);
     assert.equal(read(path.join(f.state, 'usage.json')).usageScope, 'unknown');
   } finally { try { process.kill(-out.pid, 'SIGKILL'); } catch {} }
+});
+
+test('background start/status/cancel preserve one execution and settle cancellation', async t => {
+  const f = fixture(t, 'codex', [], true);
+  f.spec.budget.maxWallSeconds = 20;
+  assert.equal(f.prepare().status, 0);
+  const started = f.cli(['start', '--state', f.state]);
+  assert.equal(started.status, 0, started.stderr);
+  assert.equal(JSON.parse(started.stdout).status, 'starting');
+  for (let i = 0; i < 100 && !fs.existsSync(f.marker); i++) await pause(50);
+  assert.ok(fs.existsSync(f.marker));
+  assert.notEqual(f.cli(['start', '--state', f.state]).status, 0);
+  assert.equal(f.cli(['cancel', '--state', f.state]).status, 0);
+  let value;
+  for (let i = 0; i < 100; i++) {
+    value = JSON.parse(f.cli(['status', '--state', f.state]).stdout);
+    if (value.status === 'cancelled') break;
+    await pause(50);
+  }
+  assert.equal(value.status, 'cancelled');
+  assert.equal(value.cleanupFailed, false);
+  assert.equal(value.chargedTokens, null);
+  assert.equal(fs.readFileSync(f.marker, 'utf8'), 'dispatch\n');
+});
+
+test('cancelling prepared work has a terminal public status and prevents dispatch', t => {
+  const f = fixture(t, 'codex', [], true);
+  assert.equal(f.prepare().status, 0);
+  assert.equal(JSON.parse(f.cli(['cancel', '--state', f.state]).stdout).status, 'cancelled');
+  assert.equal(JSON.parse(f.cli(['status', '--state', f.state]).stdout).status, 'cancelled');
+  assert.notEqual(f.cli(['start', '--state', f.state]).status, 0);
+  assert.equal(JSON.parse(f.cli(['run', '--state', f.state]).stdout).status, 'cancelled');
+  assert.equal(fs.existsSync(f.marker), false);
 });

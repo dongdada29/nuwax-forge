@@ -23,6 +23,23 @@ from http.server import BaseHTTPRequestHandler
 
 
 class UnifiedDashboardTests(unittest.TestCase):
+    def test_alert_stream_is_bounded_validated_and_escaped(self):
+        from forge_dashboard import views
+        from crew import usage, registry
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / 'alerts.jsonl'
+            row = {'schemaVersion': 1, 'kind': 'crew-watchdog-alert', 'ts': '2026-11-06T00:00:00Z',
+                   'rule': 'task-spin', 'subject': '<script>bad</script>', 'severity': 'warn'}
+            file.write_text(''.join(json.dumps(row) + '\n' for _ in range(210)))
+            alerts = u.watchdog_alerts(file)
+            self.assertEqual(len(alerts), 200)
+            reg = registry.validate({'executors': []})
+            page = views.build_html(usage.aggregate([], reg), reg, {}, [], [], generated_at='now', alerts=alerts)
+            self.assertIn('&lt;script&gt;bad&lt;/script&gt;', page)
+            self.assertNotIn('<script>bad</script>', page)
+            file.write_text('{"kind":"other"}')
+            with self.assertRaises(ValueError): u.watchdog_alerts(file)
+
     def test_loopback_server_does_not_require_reverse_dns(self):
         with patch('socket.getfqdn', side_effect=AssertionError('reverse DNS must not be called')):
             with LoopbackServer(('127.0.0.1', 0), BaseHTTPRequestHandler) as server:

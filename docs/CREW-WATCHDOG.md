@@ -30,5 +30,7 @@ python3 -B -m crew.cli patrol \
 
 - **token 级烧穿**：台账行不含 token 计数，本版用 `elapsedSeconds` 代理。token 口径（reportedTokensLowerBound / observedBudget，保留 unknown）数据源在 Forge 观测，V1 经 delivery/usage 事件接入后加规则。
 - **PR 循环重跑**：需要 GitHub 轮询数据源，归 Trigger-V0/V1，不在此版。
-- **看板展示**：告警 JSONL 已可被 dashboard 读取，V1 在看板加告警区块；群提醒由调度入口在巡查后读摘要转发。
+- **看板展示**：使用 `dashboard --alerts /absolute/alerts.jsonl` 接入巡查告警页，随页面刷新读取最近 200 条。群提醒由已授权调度入口消费巡查摘要。
 - **不做**：不自动 kill/重派任务（Watchdog 只报不治；处置仍走审批流）。
+
+公共入口为 `nuwax-forge crew patrol`，子命令 `--help` 列出阈值参数。

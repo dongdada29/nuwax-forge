@@ -112,6 +112,28 @@ class DedupAndRunTest(unittest.TestCase):
         trigger.save_state(self.state, state, now=NOW)
         self.assertEqual(json.loads(self.state.read_text(encoding="utf-8")), {})
 
+    def test_cli_returns_plans_without_recording_unexecuted_dispatch(self):
+        root = Path(self.tmp.name)
+        (root / "events.json").write_text(json.dumps([pr(rollup=[check()])]), encoding="utf-8")
+        (root / "rules.json").write_text(json.dumps(RULES[:1]), encoding="utf-8")
+        (root / "registry.json").write_text(json.dumps({"executors": [{
+            "name": "fixture", "tier": "B", "roles": ["triage"], "verified": True,
+            "invocation": {"argv": [sys.executable, "-c", "raise RuntimeError('must not execute')"], "proposed": False},
+        }]}), encoding="utf-8")
+        ledger_path = root / "usage.jsonl"
+        ledger_path.write_text("", encoding="utf-8")
+        result = subprocess.run([
+            sys.executable, "-B", "-m", "crew.cli", "trigger",
+            "--events", str(root / "events.json"), "--rules", str(root / "rules.json"),
+            "--state", str(self.state), "--registry", str(root / "registry.json"),
+            "--ledger", str(ledger_path),
+        ], cwd=ROOT, capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["dispatched"], [])
+        self.assertEqual(value["plans"][0]["status"], "planned")
+        self.assertEqual(ledger_path.read_text(encoding="utf-8"), "")
+
 
 class CollectGithubTest(unittest.TestCase):
     def test_collect_normalizes_gh_output(self):

@@ -14,6 +14,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { runDshPlugin, readStartupBinding } from '../lib/dsh-plugin.mjs';
 import { DSH_RUNTIME_VERSION } from '../lib/dsh-task-evidence.mjs';
 
@@ -51,6 +53,14 @@ test('run --startup-binding：exit 0 但插件未就绪必须判失败（注入�
   assert.equal(run('active'), 0, 'active 插件 exit 0 保持 0');
   assert.equal(run('failed'), 1, 'host exit 0 但插件 failed 必须 1');
   assert.equal(run('pending'), 1, 'pending 也不算就绪');
+  const cli = fileURLToPath(new URL('../bin/nuwax-forge.mjs', import.meta.url));
+  for (const [states, expected] of [['active', 0], ['failed', 1]]) {
+    const result = spawnSync(process.execPath, [cli, 'dsh-plugin', 'run', '--profile', 'audit',
+      '--binary', fake, '--startup-binding', bindingPath], {
+      encoding: 'utf8', env: { ...process.env, FAKE_BINDING: bindingPath, FAKE_STATUSES: states },
+    });
+    assert.equal(result.status, expected, result.stderr);
+  }
   fs.unlinkSync(binding.reportPath);
   process.env.FAKE_STATUSES = '';
   try { runDshPlugin({ subcommand: 'run', profile: 'audit', binary: fake, startupBinding: bindingPath }); } finally { delete process.env.FAKE_STATUSES; }
@@ -69,4 +79,13 @@ test('startup-binding 参数校验与绑定文件校验', () => {
   fs.writeFileSync(bad, '{"schemaVersion":99}');
   assert.throws(() => readStartupBinding(bad));
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('public crew delegates command help to the installed sibling package', () => {
+  const cli = fileURLToPath(new URL('../bin/nuwax-forge.mjs', import.meta.url));
+  for (const subcommand of ['patrol', 'trigger']) {
+    const result = spawnSync(process.execPath, [cli, 'crew', subcommand, '--help'], {encoding: 'utf8'});
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes(subcommand));
+  }
 });

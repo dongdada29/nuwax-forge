@@ -3,8 +3,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmdirSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { BOT_FILES, BOT_PIN, BOT_PROFILE } from './pin.mjs';
+import { BOT_FILES, BOT_PIN, BOT_PROFILE, BOT_DSH_VERSIONS } from './pin.mjs';
 import { bridgeReport, inspectBridge, operatorConfigPath, prepareBridge } from './composition.mjs';
+import { compatibilityFiles } from './compatibility.mjs';
 
 const KIND = 'nuwax-forge-ds-bot';
 const MAX_ARTIFACT = 8 * 1024 * 1024;
@@ -118,7 +119,7 @@ function invoke(binary, paths, args) {
 
 function version(binary, paths) {
   const found = invoke(binary, paths, ['--version']).trim();
-  assert(found === BOT_PIN.dshVersion, `DSH version mismatch: this integration requires ${BOT_PIN.dshVersion}`);
+  assert(BOT_DSH_VERSIONS.includes(found), `DSH version mismatch: supported hosts are ${BOT_DSH_VERSIONS.join(', ')}`);
   return found;
 }
 
@@ -172,7 +173,7 @@ async function archive(paths, tarball) {
   if (!existsSync(paths.archive)) writeFileSync(paths.archive, bytes, { flag: 'wx', mode: 0o600 });
 }
 
-function packageCheck(paths) {
+function packageCheck(paths, runtimeVersion) {
   const manifest = json(join(paths.profileDir, 'package.json'));
   const bundles = manifest.dsh?.profile?.bundles;
   assert(Array.isArray(bundles) && ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'ds-bot'].every(name => bundles.includes(name)), 'DSH web profile has not activated the original DS-Bot bundle');
@@ -183,12 +184,14 @@ function packageCheck(paths) {
   const pkg = json(join(packageDir, 'package.json'));
   assert(pkg.name === BOT_PIN.name && pkg.version === BOT_PIN.version && pkg.license === BOT_PIN.license, 'Installed DS-Bot package/version mismatch');
   assert(pkg.main === 'index.js' && pkg.exports?.['./client'] === './client.js' && pkg.dsh?.client?.platform === 'web' && pkg.dsh?.bundle?.patch === './cordis.patch.yml', 'Original host/client/bundle exports are required');
-  for (const [file, hash] of Object.entries(BOT_FILES)) {
+  const expectedFiles = compatibilityFiles(paths, runtimeVersion);
+  for (const [file, hash] of Object.entries(expectedFiles)) {
     const target = realpathSync(join(packageDir, file));
     assert(target.startsWith(packageDir + sep), 'DS-Bot file escaped installed package');
     assert(digest(readFileSync(target)) === hash, 'Original DS-Bot artifact changed: ' + file);
   }
-  return { name: pkg.name, version: pkg.version, originalFilesVerified: Object.keys(BOT_FILES).length, client: pkg.exports['./client'] };
+  return { name: pkg.name, version: pkg.version, originalFilesVerified: runtimeVersion === '0.2.2-rc.1' ? 6 : 7,
+    compatibility: runtimeVersion === '0.2.2-rc.1' ? 'forge-prompt-assembly-v1' : null, client: pkg.exports['./client'] };
 }
 
 function rowOf(dump, id) {
@@ -237,7 +240,7 @@ function inspect({ root, binary, forgeConfig }) {
   const dshVersion = version(binary, paths);
   localFile(paths, paths.archive);
   verifyBotArchive(readFileSync(paths.archive));
-  const pkg = packageCheck(paths);
+  const pkg = packageCheck(paths, dshVersion);
   const dump = invoke(binary, paths, ['--profile', BOT_PROFILE, '--dump-config']);
   const composition = verifyBotComposition(dump, paths);
   if (bridge) {
@@ -259,8 +262,12 @@ export async function prepareBot(options) {
   const release = lock(paths);
   try {
     setup(paths);
-    version(options.binary, paths);
-    if (marker.state === 'ready') return inspect(options);
+    const runtimeVersion = version(options.binary, paths);
+    if (marker.state === 'ready') {
+      verifyBotArchive(readFileSync(paths.archive));
+      compatibilityFiles(paths, runtimeVersion, true);
+      return inspect(options);
+    }
     if (!existsSync(join(paths.profileDir, 'package.json'))) invoke(options.binary, paths, ['--profile', BOT_PROFILE, '--from-default-profile', 'web', '--dump-config']);
     const patch = join(paths.profileDir, 'cordis.patch.yml');
     localFile(paths, patch);
@@ -271,6 +278,7 @@ export async function prepareBot(options) {
       value => writeFileSync(paths.marker, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 }), localFile);
     await archive(paths, options.tarball);
     invoke(options.binary, paths, plan.prepare);
+    compatibilityFiles(paths, runtimeVersion, true);
     const result = inspect(options);
     writeFileSync(paths.marker, JSON.stringify({ ...marker, state: 'ready' }, null, 2) + '\n', { mode: 0o600 });
     return result;

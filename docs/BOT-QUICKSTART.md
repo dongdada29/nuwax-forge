@@ -1,6 +1,6 @@
 # 启动原版 DS-Bot 团队
 
-Forge 使用固定的 `ds-bot@0.2.7` 和真实 DSH `0.2.1-rc.5`。界面、Bot、群聊、模型设置和记忆面板均来自原插件；这里提供隔离安装和前台启动入口。公共命令已合入主线，原有安装需检查是否包含此功能。完整来源、各层已验范围及未验项见 [BOT-INTEGRATION.md](BOT-INTEGRATION.md)。
+Forge 使用固定的 `ds-bot@0.2.7` 和DSH `0.2.1-rc.5` / `0.2.2-rc.1`。界面、Bot、群聊、模型设置和记忆面板均来自原插件；这里提供隔离安装和前台启动入口。公共命令已合入主线，原有安装需检查是否包含此功能。完整来源、各层已验范围及未验项见 [BOT-INTEGRATION.md](BOT-INTEGRATION.md)。
 
 ## 第一次准备
 
@@ -55,3 +55,9 @@ node --test packages/cli/test/bots-*.test.mjs packages/cli/test/cli.test.mjs
 本次不证明真实模型回答、记忆写入/总结、群内实际 `@` 派发、系统默认浏览器打开、完整群详情面板或移动端布局。浏览器验收使用 nuwa-browser；自动化测试只验证原生宿主发出打开请求，不启动系统默认浏览器。上述浏览器记录与默认 API 测试是两组验收；API 测试的 `modelCallsRequested=0` 不适用于建群自动问候的 UI 记录。
 
 此节只描述原生浏览器与启动验收；另有[非空记忆](BOT-MEMORY-ACCEPTANCE.md)、[群调度](BOT-GROUP-ROUTING-ACCEPTANCE.md)的原模块契约，以及[真实宿主到本地模拟 provider](BOT-PROVIDER-HOST-ACCEPTANCE.md)的专项证据。需要 Bot 准备有限 Forge 任务时，另按[工具桥说明](BOT-FORGE-BRIDGE.md)配置；`bots prepare/run` 不会自动加载桥或连接 PA。
+
+## DSH 0.2.2 升级
+
+使用新安装的 Forge 对既有受管团队再次运行 `bots prepare`。DS-Bot 原始归档继续校验固定 SRI，Forge 保留 tools.js 原件并应用提示组装兼容补丁。check/run 同时核对六个原始文件、tools.js 补丁结果与兼容模块。人工改动会中止升级。再次用 0.2.1-rc.5 执行 prepare 时恢复已核对的原始 tools.js。
+
+2026-11-06 在 macOS 上完成 0.2.2-rc.1 的隔离宿主、双 Bot 本地测试模型路由、聊天回读、团队重启与原生 Forge 工具注册验证。真实 provider 的业务任务另由实际执行记录验收。

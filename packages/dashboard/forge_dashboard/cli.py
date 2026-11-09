@@ -33,7 +33,7 @@ def load_dashboard(args):
     health_data = json.loads(h.read_text(encoding="utf-8")) if h and h.exists() else {}
     m = Path(args.matrix) if args.matrix else None
     matrix = json.loads(m.read_text(encoding="utf-8")) if m and m.exists() else []
-    inputs = [Path(x).resolve() for x in (args.ledger, args.registry, args.health, args.matrix, args.task_store, args.host_budget, args.approval_store, getattr(args, 'personal_agent_snapshot', None)) if x]
+    inputs = [Path(x).resolve() for x in (getattr(args, 'alerts', None), args.ledger, args.registry, args.health, args.matrix, args.task_store, args.host_budget, args.approval_store, getattr(args, 'personal_agent_snapshot', None)) if x]
     agent_dirs = {Path(args.agent_state).resolve(strict=True)} if args.agent_state else set()
     if args.agent_state_root:
         root = Path(args.agent_state_root).resolve(strict=True)
@@ -77,7 +77,10 @@ def load_dashboard(args):
     def latest(values):
         dates = [v for v in values if timestamp(v) is not None]
         return max(dates, key=timestamp) if dates else None
+    alerts_path = getattr(args, 'alerts', None)
+    alerts = sources.watchdog_alerts(alerts_path) if alerts_path else []
     states = [
+        source_health('巡查告警', alerts_path, last_at=latest(a['ts'] for a in alerts)),
         source_health('Crew 派工台账', args.ledger, last_at=latest(r.get('ts') or r.get('atUtc') for r in rows)),
         source_health('执行器注册表', args.registry, snapshot=True),
         source_health('执行器健康快照', args.health),
@@ -92,7 +95,7 @@ def load_dashboard(args):
     return dict(usage=data, registry=reg, health=health_data, matrix=matrix, flow_rows=flow_rows,
                 records=records, notes=notes, approval_items=approval_items,
                 approvals_actionable=bool(args.serve and args.approval_store),
-                task_items=task_items, source_states=states)
+                task_items=task_items, source_states=states, alerts=alerts)
 
 
 def cmd_dashboard(args) -> int:
@@ -160,6 +163,7 @@ def cmd_dashboard_server(args) -> int:
                         f'<span id="source-time">派工台账最后写入：{source_time}</span></div>'
                         '<nav class="view-nav" aria-label="看板视图">' +
                         ('<button type="button" data-target="approvals">任务审批</button>' if args.approval_store else '') +
+                        ('<button type="button" data-target="alerts">巡查告警</button>' if getattr(args, 'alerts', None) else '') +
                         '<button type="button" data-target="tasks">任务工作台</button>'
                         '<button type="button" data-target="overview">运行总览</button>'
                         '<button type="button" data-target="routes">路由关系</button>'
@@ -242,7 +246,7 @@ def cmd_dashboard_server(args) -> int:
 def add_arguments(p):
     p.add_argument("--ledger", required=True)
     p.add_argument("--registry", required=True)
-    for name in ("health", "matrix", "task-store", "agent-state", "agent-state-root", "host-budget", "approval-store", "personal-agent-snapshot", "embed-origin", "out"):
+    for name in ("alerts", "health", "matrix", "task-store", "agent-state", "agent-state-root", "host-budget", "approval-store", "personal-agent-snapshot", "embed-origin", "out"):
         p.add_argument("--" + name, default=None)
     p.add_argument("--serve", action="store_true")
     p.add_argument("--port", type=int, default=0)

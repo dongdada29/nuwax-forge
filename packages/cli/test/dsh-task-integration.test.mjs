@@ -26,8 +26,9 @@ for (const surface of ['native', 'forge']) for (const fixture of cases) {
       const env = { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: home, DSH_HOME: dshHome, DSH_AGENTS_HOME: agentsHome, DSH_TELEMETRY_DISABLED: 'true', NO_COLOR: '1' };
       const version = spawnSync(binary, ['--version'], { cwd: root, env, encoding: 'utf8', timeout: 3000 });
       assert.equal(version.status, 0);
-      assert.equal(version.stdout.trim(), DSH_RUNTIME_VERSION, 'live tests support only the pinned runtime');
-      const binding = { schemaVersion: 1, taskRef: { source: 'test:isolated', taskKey: fixture }, attemptId: 'attempt', runId: 'run', invocationId: randomBytes(16).toString('hex'), targetEntryIds: ['include:target'], runtimeVersion: DSH_RUNTIME_VERSION, reportPath: path.join(root, 'report.json') };
+      const runtimeVersion = version.stdout.trim();
+      assert.ok(['0.2.1-rc.5', '0.2.2-rc.1'].includes(runtimeVersion));
+      const binding = { schemaVersion: 1, taskRef: { source: 'test:isolated', taskKey: fixture }, attemptId: 'attempt', runId: 'run', invocationId: randomBytes(16).toString('hex'), targetEntryIds: ['include:target'], runtimeVersion, reportPath: path.join(root, 'report.json') };
       const targetFixture = ['success', 'failure', 'missing-service'].includes(fixture) ? fixture : 'success';
       const entries = fixture === 'missing-entry' ? [] : [{ id: 'target', name: fileURLToPath(new URL('./fixtures/dsh-task-' + targetFixture + '.mjs', import.meta.url)), disabled: fixture === 'disabled' }];
       entries.push({ id: 'observer', name: fileURLToPath(new URL('../lib/dsh-task-observer.mjs', import.meta.url)), config: binding });

@@ -82,7 +82,21 @@ def board_columns(matrix: list) -> list:
     return [(title, cls, buckets[title]) for title, _, cls in BOARD_COLUMNS]
 
 
-def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_rows: list, *, generated_at: str, records=None, notes=None, approval_items=None, approvals_actionable=False, task_items=None, source_states=None) -> str:
+def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_rows: list, *, generated_at: str, records=None, notes=None, approval_items=None, approvals_actionable=False, task_items=None, source_states=None, alerts=None) -> str:
+    alert_rows = ''.join(
+        f'<tr><td>{esc(a["ts"])}</td><td>{esc(a["rule"])}</td>'
+        f'<td>{esc(a["subject"])}</td><td>{esc(a["severity"])}</td></tr>'
+        for a in reversed(alerts or []))
+    alert_section = ('<section data-view="alerts"><h2>巡查告警</h2>'
+                     '<p>按记录时间显示最近 200 条告警。</p>'
+                     '<table data-paginate="alerts"><tr><th>时间</th><th>规则</th>'
+                     '<th>对象</th><th>等级</th></tr>' +
+                     (alert_rows or '<tr><td colspan="4">暂无告警</td></tr>') + '</table></section>')
+    declared_models = ''.join(
+        f'<tr><td>{esc(e["name"])}</td><td>{esc(m["id"])}</td>'
+        f'<td>{esc(m.get("class") or "未分层")}</td>'
+        f'<td>{"已核验" if m.get("verified") else "待核验"}</td></tr>'
+        for e in registry['executors'] for m in e.get('models', []))
     ex = usage["perExecutor"]
     subs = usage["perSubscription"]
     total = sum(v["total"] for v in ex.values())
@@ -274,6 +288,7 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <div id="dashboard-content">
 {workbench_html}
 {approval_section}
+{alert_section}
 <section data-view="overview"><h2>总览 <b>OVERVIEW</b></h2>{kpis}</section>
 <section data-view="overview"><div class="summary-grid">
 <div class="summary-card wide"><div class="chart-label">Activity · 7 days</div><h3>近七天派工活动</h3><p>以 UTC 当日为截止，按台账时间戳中的日期统计原始记录，包含派工和结果事件。</p><div class="trend" role="img" aria-label="近七天 Crew 台账记录数">{trend_html}</div></div>
@@ -287,6 +302,7 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 <section data-view="routes"><h2>路由关系 <b>ROUTER → WORKER</b></h2>
 <p class="dim">仅 host-guard 记录明确的宿主到 Worker 关联；其他来源的 Router 身份未记录，不能据此推断具体路由者。记录数按来源分开，不跨来源合并。</p>
 <table data-paginate="routes"><tr><th>来源</th><th>Router → Worker</th><th>角色</th><th>模型</th><th>记录</th><th>任务</th></tr>{route_rows}</table></section>
+<section data-view="models"><h2>已登记模型</h2><table><tr><th>执行器</th><th>模型</th><th>分层</th><th>核验</th></tr>{declared_models}</table></section>
 <section data-view="models"><h2>模型与执行器 <b>MODEL / WORKER USAGE</b></h2>
 <p class="dim">按来源分别统计，跨来源可能是同一次执行；已知 token 为部分合计，未知次数单列。缺少 attemptId 的历史记录无法去重。host-guard 是观测快照，不含后续消耗；模型为执行记录声明，不推断实际供应商账单。</p>
 {notes_html}
@@ -304,9 +320,9 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
 </div></div></body></html>"""
 
 
-def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list, records=None, notes=None, approval_items=None, approvals_actionable=False, task_items=None, source_states=None) -> str:
+def write_dashboard(out_path, *, usage, registry, health, matrix, flow_rows: list, records=None, notes=None, approval_items=None, approvals_actionable=False, task_items=None, source_states=None, alerts=None) -> str:
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
-    page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at, records=records, notes=notes, approval_items=approval_items, approvals_actionable=approvals_actionable, task_items=task_items, source_states=source_states)
+    page = build_html(usage, registry, health, matrix, flow_rows, generated_at=generated_at, records=records, notes=notes, approval_items=approval_items, approvals_actionable=approvals_actionable, task_items=task_items, source_states=source_states, alerts=alerts)
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(page, encoding="utf-8")

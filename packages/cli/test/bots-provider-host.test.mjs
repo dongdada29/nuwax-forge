@@ -3,7 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, readFileSync } from 'node:fs';
+import { zstdDecompressSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -119,7 +120,20 @@ test('real DSH routes two original Bots to distinct local fixture models', {
   for (const [index, bot] of bots.entries()) {
     const suffix = index === 0 ? 'a' : 'b';
     await api('send', { sessionId: bot.id, text: 'FORGE_PRIVATE_MARKER_' + suffix });
-    await until(() => requests.some(request => request.model === 'route-' + suffix && JSON.stringify(request.messages).includes('FORGE_PRIVATE_MARKER_' + suffix)), 'Bot message did not reach its configured local model');
+    try {
+      await until(() => requests.some(request => request.model === 'route-' + suffix && JSON.stringify(request.messages).includes('FORGE_PRIVATE_MARKER_' + suffix)), 'Bot message did not reach its configured local model');
+    } catch (error) {
+      const sessionRoot = join(options.root, 'dsh', 'sessions');
+      const sessions = readdirSync(sessionRoot, {recursive:true}).filter(f => f.endsWith('.jsonl.zstd')).map(f => {
+        const rows = zstdDecompressSync(readFileSync(join(sessionRoot,f))).toString().trim().split('\n').map(JSON.parse);
+        return {file:f,events:rows.slice(-12).map(r=>({type:r.type,seq:r.seq,reason:r.data?.reason}))};
+      });
+      t.diagnostic(JSON.stringify({sessions, requests: requests.map(r => r.model), wireErrors,
+        chat: await api('chat', {botId: bot.id}),
+        bots: (await api('state')).bots,
+        errors: startup.split('\n').filter(line => /error|Error|failed/.test(line)).map(line => line.replace(/token=[^\s]+/g, 'token=[redacted]')) }));
+      throw error;
+    }
     await until(async () => {
       const chat = JSON.stringify(await api('chat', { botId: bot.id }));
       return chat.includes('LOCAL_FIXTURE_REPLY_route-' + suffix + '_MESSAGE_ACK') && chat.includes('FORGE_PRIVATE_MARKER_' + suffix);

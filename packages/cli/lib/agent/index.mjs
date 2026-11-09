@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, statSync, existsSync, openSync, closeSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, statSync, existsSync, openSync, closeSync, renameSync } from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { UsageError } from '../args.mjs';
 import { isInside, realpathNearestExisting, resolveStateReal } from '../paths.mjs';
@@ -9,7 +9,11 @@ import { prepareExecution, settleExecution, readBoundedJson } from '../budget/ex
 import { doctor, command, environment, dshPatch, Observation } from './adapters.mjs';
 import { supervise, terminationProbe } from './lifecycle.mjs';
 const hash = s => createHash('sha256').update(s).digest('hex');
-const save = (p, v) => writeFileSync(p, JSON.stringify(v, null, 2) + '\n', { mode: 0o600 });
+const save = (p, v) => {
+  const temporary = p + '.' + randomUUID() + '.tmp';
+  writeFileSync(temporary, JSON.stringify(v, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+  renameSync(temporary, p);
+};
 const emit = v => process.stdout.write(JSON.stringify(v, null, 2) + '\n');
 const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const warning = 'phase gate, not provider hard token cap; in-flight/unreported calls unknown';
@@ -87,12 +91,20 @@ export function reconcile(state) {
     observedBudget: settlement.observedBudget,
     acceptancePassed: null, warning };
   result.status = result.processPassed && result.agentCompleted && result.budgetPassed ? 'completed' : result.modelDispatched ? 'failed' : 'blocked';
+  if (manifest.stopReason === 'cancelled') result.status = 'cancelled';
   save(manifestFile, result); return { ...result, state };
 }
 export async function run(state, lifecycleOptions = {}) {
   const spec = load(state), manifestFile = path.join(state, 'manifest.json');
   const manifest = readBoundedJson(manifestFile);
   if (manifest.status !== 'prepared') throw new UsageError('只运行 prepared 的新任务；失败/完成后禁止 retry/resume');
+  const cancelled = () => existsSync(path.join(state, 'cancel.request'));
+  lifecycleOptions = { ...lifecycleOptions, stopRequested: cancelled };
+  if (cancelled()) {
+    const result = { ...manifest, status: 'cancelled', stopReason: 'cancelled', modelDispatched: false };
+    save(manifestFile, result);
+    return { ...result, state };
+  }
   const prompt = readFileSync(path.join(state, 'brief.txt'), 'utf8'), cmd = command(spec, state);
   const decision = prepareExecution({ spec: spec.budgetSpec, remainingTokens: spec.budget.maxTokens, brief: prompt,
     context: spec.context, worktree: spec.worktree, command: cmd, requiredModel: spec.runtime.model });
@@ -105,8 +117,8 @@ export async function run(state, lifecycleOptions = {}) {
   const env = environment(spec.runtime.kind, state);
   const termination = await terminationProbe({ ...lifecycleOptions, cwd: spec.worktree, env });
   save(path.join(state, 'termination-probe.json'), termination);
-  if (!termination.passed) {
-    const blocked = { ...manifest, status: 'blocked', reason: 'termination-probe-blocked', modelDispatched: false,
+  if (!termination.passed || cancelled()) {
+    const blocked = { ...manifest, status: cancelled() ? 'cancelled' : 'blocked', reason: cancelled() ? 'cancelled' : 'termination-probe-blocked', modelDispatched: false,
       cleanupFailed: termination.cleanupFailed, usageKnown: false, chargedTokens: null, budgetPassed: false, terminationProbe: termination };
     save(manifestFile, blocked); return { ...blocked, state };
   }
@@ -137,6 +149,10 @@ export async function run(state, lifecycleOptions = {}) {
 export async function runAgent(opts) {
   let result;
   if (opts.subcommand === 'doctor') result = doctor({ kind: opts.runtime, binary: opts.binary });
+  else if (['start', 'status', 'cancel'].includes(opts.subcommand)) {
+    const jobs = await import('./jobs.mjs');
+    result = await jobs[opts.subcommand](statePath(opts.state));
+  }
   else if (opts.subcommand === 'prepare') result = await prepare(opts);
   else if (['run', 'reconcile'].includes(opts.subcommand)) {
     const state = statePath(opts.state);
@@ -144,4 +160,11 @@ export async function runAgent(opts) {
   } else throw new UsageError('agent 需要 doctor / prepare / run / reconcile');
   emit(result);
   process.exitCode = result.supported === false || result.status === 'blocked' ? 3 : result.status === 'failed' ? 1 : 0;
+}
+
+export function executionStatus(state) {
+  const spec = load(state);
+  const manifest = readBoundedJson(path.join(state, 'manifest.json'));
+  if (manifest.taskKey !== spec.taskKey) throw new UsageError('任务状态与请求不匹配');
+  return { ...manifest, state };
 }
