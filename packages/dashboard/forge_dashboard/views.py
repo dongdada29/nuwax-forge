@@ -259,7 +259,7 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
     recent_html = ''.join(
         f'<li>{esc((r.get("ts") or r.get("atUtc") or "")[:19])} · {esc(r.get("taskKey") or "unknown")} · {esc(r.get("status") or "unknown")}</li>'
         for r in flow_rows[:5]) or '<li class="dim">暂无派工流水</li>'
-    approved_status = {'pending': '待审批', 'approved': '已通过', 'rejected': '已拒绝'}
+    approved_status = {'pending': '待审批', 'approved': '已通过', 'rejected': '已拒绝', 'superseded': '已被新方案替代（未审批）'}
     cards = []
     for item in approval_items or []:
         state = item.get('status', 'unknown')

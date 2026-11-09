@@ -86,6 +86,25 @@ def decide(path, identity, decision):
     return {'id': identity, 'status': decision}
 
 
+def supersede_pending(path, previous_id, replacement_id):
+    """Retire an undecided plan in favour of a new pending plan; never approve it."""
+    with _transaction(path) as db:
+        old = db.execute('SELECT payload,status FROM approvals WHERE id=?', (previous_id,)).fetchone()
+        new = db.execute('SELECT payload,status FROM approvals WHERE id=?', (replacement_id,)).fetchone()
+        if not old or not new:
+            raise ValueError('replacement-approval-missing')
+        before, after = json.loads(old[0]), json.loads(new[0])
+        if (previous_id == replacement_id or old[1] not in {'pending', 'superseded'}
+                or (new[1] != 'pending' and not (old[1] == 'superseded' and new[1] in {'approved','rejected'}))
+                or before.get('taskRef') != after.get('taskRef')
+                or not before.get('taskRef') or before['taskKey'] != after['taskKey']
+                or before['attemptId'] == after['attemptId']
+                or after.get('supersedesApprovalId') != previous_id):
+            raise ValueError('only-undecided-same-task-plan-can-be-replaced')
+        db.execute("UPDATE approvals SET status='superseded' WHERE id=? AND status='pending'", (previous_id,))
+    return {'id': previous_id, 'status': 'superseded', 'replacementId': replacement_id}
+
+
 def verify(path, identity, *, task, attempt, worktree, plan, brief, plan_bytes=None, brief_bytes=None):
     if not re.fullmatch(r'[0-9a-f]{64}', identity or ''): raise ValueError('approval-id-invalid')
     with _transaction(path) as db:

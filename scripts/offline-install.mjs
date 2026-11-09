@@ -133,7 +133,8 @@ function main() {
         const route = `\n<!-- nuwax-forge:begin -->\n有限本机执行按需读取 ${path.join(release, 'skill', 'SKILL.md')}，调用 node ${JSON.stringify(path.join(release, 'skill', 'scripts', 'forge.mjs'))}。平台统一入口为 nuwax-forge，Stack 为内部模块；子执行器只完成短 brief，不加载主控 Skill 或递归派工。\n<!-- nuwax-forge:end -->\n`;
         const config = JSON.parse(Buffer.from(originals[1].content.data, 'base64').toString('utf8'));
         if (!config || Array.isArray(config) || typeof config !== 'object' || (config.runtimeGuard !== undefined && (!config.runtimeGuard || Array.isArray(config.runtimeGuard) || typeof config.runtimeGuard !== 'object'))) throw Error('work-computer.json/runtimeGuard 必须是对象');
-        config.runtimeGuard = { ...config.runtimeGuard, devkitCli: cli, devkitCrewRoot: crew };
+        config.runtimeGuard = { ...config.runtimeGuard, devkitCli: cli, devkitCrewRoot: crew,
+          scriptPath: path.join(stack, 'scripts', 'runtime_guard.py') };
         const tool = config.runtimeGuard.tools?.devkitCli;
         if (tool !== undefined) {
           if (!tool || Array.isArray(tool) || typeof tool !== 'object') throw Error('runtimeGuard.tools.devkitCli 必须是对象');

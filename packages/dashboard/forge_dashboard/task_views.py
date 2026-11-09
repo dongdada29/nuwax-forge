@@ -76,7 +76,7 @@ def _detail(task):
                       f'{group["knownTokens"] if group["knownCount"] else "unknown"} 已知 token · '
                       f'{group["unknownTokens"]} 条用量未知</li>' for group in summarize(task['attempts'])) or '<li class="dim">尚无执行用量</li>'
     approvals = ''.join(f'<li>{esc(item.get("summary"))} · '
-                        f'{esc({"pending":"待审批", "approved":"已通过", "rejected":"已拒绝"}.get(item.get("status"), "未知"))}'
+                        f'{esc({"pending":"待审批", "approved":"已通过", "rejected":"已拒绝", "superseded":"已被新方案替代（未审批）"}.get(item.get("status"), "未知"))}'
                         f' · 尝试 {esc(item.get("attemptId"))}</li>' for item in task['approvals'])
     approval_block = ('<h4>任务审批</h4><ul class="task-facts">' + approvals + '</ul>'
                       '<button type="button" data-go-view="approvals">前往审批页</button>') if approvals else ''
@@ -91,14 +91,17 @@ def _detail(task):
                       f'{esc(when(latest.get("at")))}'
                       f'{"；含时间未知记录，顺序待核实" if not task["attemptOrderKnown"] else ""}</p>') if latest else ''
     status_note = '<p class="task-notice">' + esc(task['statusNote']) + '</p>' if task['statusNote'] else ''
+    next_action = '<p><b>下一步：</b>' + esc(task.get('nextAction')) + '</p>' if task.get('nextAction') else ''
+    blocker = '<p class="task-notice">阻塞：' + esc(task.get('blocker')) + '</p>' if task.get('blocker') else ''
+    source_delivery = '<p>来源交付记录（待核验）：</p>' + delivery_html(task.get('delivery',{})) if task.get('delivery') else ''
     return (f'<details id="task-{task["id"]}" class="task-detail" data-task-detail="{task["id"]}">'
             f'<summary>{esc(task["title"])} · 查看详情</summary><div class="task-detail-body">'
             f'<p class="eyebrow">{esc(task["source"])} · {esc(task["taskKey"])}</p>'
             f'<h3>{esc(task["title"])}</h3><p class="task-state state-{task["state"]}">{STATES[task["state"]]} · {esc(task["status"])}</p>'
-            f'{source_status}{attempt_status}{status_note}{warning}<h4>目标与验收条件</h4><p>{esc(task["objective"] or "目标未记录")}</p><ul class="task-facts">{acceptance}</ul>'
+            f'{source_status}{attempt_status}{status_note}{warning}{next_action}{blocker}<h4>目标与验收条件</h4><p>{esc(task["objective"] or "目标未记录")}</p><ul class="task-facts">{acceptance}</ul>'
             f'<p class="dim">工作区：{esc(task["workspace"] or "未记录")}</p>{approval_block}'
             f'<h4>执行与交付</h4><p class="dim">{task["attemptCount"]} 次可识别尝试 · {task["legacyCount"]} 条无尝试 ID 的观察。执行结束不等于产品验收通过；交付引用尚未独立验证。</p>'
-            f'<ul class="attempt-list">{"".join(attempts) or "<li class=dim>尚未派工</li>"}</ul>'
+            f'{source_delivery}<ul class="attempt-list">{"".join(attempts) or "<li class=dim>尚未派工</li>"}</ul>'
             f'<h4>用量记录</h4><ul class="task-facts">{charges}</ul><p class="dim">按来源分别展示，未知不记为 0，不跨来源求和。</p>'
             f'<h4>事件时间线 <span class="dim">{len(task["events"])} 条</span></h4><ol class="task-timeline">{events}</ol>'
             '</div></details>')
@@ -116,7 +119,7 @@ def render_workbench(tasks, *, source_states=()):
         freshness = '<p class="freshness-notice">' + esc('；'.join(messages)) + '。页面读取成功不代表执行仍在运行，来源时间见下方。</p>'
     options = lambda values: ''.join(f'<option value="{esc(value)}">{esc(label)}</option>' for value, label in values)
     quick = ''.join(f'<button type="button" data-task-state="{state}" aria-pressed="false">{STATES[state]} <b>{counts[state]}</b></button>'
-                    for state in ('approval', 'review', 'blocked', 'running'))
+                    for state in ('approval', 'decision', 'review', 'blocked', 'running'))
     rows = []
     for task in tasks:
         search = ' '.join([task['taskKey'], task['title'], task['objective'], task['workspace'],

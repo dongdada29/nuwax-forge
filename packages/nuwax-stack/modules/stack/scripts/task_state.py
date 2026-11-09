@@ -57,9 +57,13 @@ class TaskStore:
                 raise ValueError("已有有效执行者或任务不存在")
 
     def checkpoint(self, task_id, owner, expected_revision, patch):
-        allowed = {"phase", "head", "next_action", "last_action", "evidence", "wake", "blocker"}
+        allowed = {"phase", "head", "next_action", "last_action", "evidence", "wake", "blocker", "delivery"}
         if not isinstance(patch, dict) or set(patch) - allowed:
             raise ValueError("检查点含未知字段")
+        if 'delivery' in patch and (not isinstance(patch['delivery'], dict)
+                or set(patch['delivery']) - {'branch','commit','prUrl'}
+                or any(not isinstance(v,str) or not v.strip() or len(v)>2048 for v in patch['delivery'].values())):
+            raise ValueError('交付字段无效')
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
             current = self.read(task_id)
