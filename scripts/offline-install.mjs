@@ -102,6 +102,14 @@ function main() {
       } finally { if (fs.existsSync(stage)) fs.rmSync(stage, { recursive: true }); }
       // Installed core is checked before registration. Never consult source dependencies/config.
       const env = { ...process.env }; delete env.NUWAX_DEVKIT_RESOLVE_ROOT;
+      let hostPython;
+      if (host === 'nuwax') {
+        hostPython = read(targetPaths[1].path).runtimeGuard?.tools?.python?.path;
+        if (hostPython !== undefined) {
+          if (typeof hostPython !== 'string' || !path.isAbsolute(hostPython) || /[\r\n\0]/.test(hostPython)) throw Error('工作台 Python 必须是显式绝对路径');
+          env.NUWAX_DEVKIT_PYTHON = hostPython;
+        }
+      }
       const check = spawnSync(process.execPath, [cli, 'doctor', '--json'], { env, encoding: 'utf8', timeout: 30000 });
       if (check.status !== 0) throw Error(`安装版 doctor 失败: ${check.stderr || check.stdout}`);
       let targets;
@@ -141,7 +149,9 @@ function main() {
         targets = [{ ...targetPaths[0], content: { data: Buffer.from(originalAgents + route).toString('base64'), mode: originals[0].content?.mode ?? 0o600 } },
           { ...targetPaths[1], content: { data: Buffer.from(JSON.stringify(config, null, 2) + '\n').toString('base64'), mode: originals[1].content.mode } }];
       }
-      const launcher = '#!/bin/sh\nexec ' + [process.execPath, cli].map(x => "'" + x.replaceAll("'", "'\\''") + "'").join(' ') + ' \"$@\"\n';
+      const quote = x => "'" + x.replaceAll("'", "'\\''") + "'";
+      const launcher = '#!/bin/sh\nunset NUWAX_DEVKIT_RESOLVE_ROOT\n' + (hostPython ? 'export NUWAX_DEVKIT_PYTHON=' + quote(hostPython) + '\n' : '') +
+        'exec ' + [process.execPath, cli].map(quote).join(' ') + ' \"$@\"\n';
       targets.push({...targetPaths.at(-1), content: {data: Buffer.from(launcher).toString('base64'), mode: 0o755}});
       if (state?.active && state.history.at(-1).id === manifest.id) { console.log(JSON.stringify({ status: 'unchanged', root, release, doctor: JSON.parse(check.stdout) })); return; }
       const next = state ?? { owner: 'nuwax-forge-installer-v1', root, host, originals, history: [] };

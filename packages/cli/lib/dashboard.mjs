@@ -15,7 +15,7 @@ export function runDashboard(opts) {
     if (opts[key]) args.push('--' + key, opts[key]);
   }
   if (opts.serve) args.push('--serve');
-  const result = spawnSync(opts.python || 'python3', args, {
+  const result = spawnSync(opts.python || process.env.NUWAX_DEVKIT_PYTHON || 'python3', args, {
     cwd: process.cwd(), stdio: 'inherit',
     env: { ...process.env, PYTHONPATH: [dashboard.root, crew.root, process.env.PYTHONPATH].filter(Boolean).join(delimiter) },
   });

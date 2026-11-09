@@ -42,7 +42,7 @@ export async function runPlan(opts) {
   if (!Number.isInteger(timeout) || timeout < 1 || timeout > 3600) throw new UsageError('--timeout 必须是 1..3600 整数');
   const crew = resolvePackage('@nuwax-ai/devkit-crew');
   if (!crew) throw new Error('未找到同安装 @nuwax-ai/devkit-crew');
-  const child = spawn(opts.python ?? 'python3', ['-B', '-m', 'crew', 'run', '--plan', plan, '--worktree', project,
+  const child = spawn(opts.python || process.env.NUWAX_DEVKIT_PYTHON || 'python3', ['-B', '-m', 'crew', 'run', '--plan', plan, '--worktree', project,
     '--brief', '@' + brief, '--ledger', join(state, 'ledger.jsonl'), '--artifacts', join(state, 'artifacts'), '--timeout', String(timeout)], {
     cwd: crew.root, stdio: 'inherit', env: { ...process.env, NUWAX_DEVKIT_NODE: process.execPath,
       PYTHONPATH: crew.root + (process.env.PYTHONPATH ? delimiter + process.env.PYTHONPATH : '') },
