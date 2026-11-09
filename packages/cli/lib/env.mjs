@@ -51,7 +51,7 @@ export function checkPython(explicit) {
   const requested = configured || 'python3';
   const bin = which(requested);
   if (!bin) {
-    return { bin: null, version: null, problems: [configured ? `配置的 Python 不可用（PATH 中找不到命令）: ${requested}` : '未找到 python3（可用 --python 显式指定绝对路径或 PATH 命令）'] };
+    return { bin: null, version: null, problems: [configured ? `${explicit ? '--python' : 'NUWAX_DEVKIT_PYTHON'} 不可用（PATH 中找不到命令）: ${requested}` : '未找到 python3（可用 --python 显式指定绝对路径或 PATH 命令）'] };
   }
   const version = probe(bin, '--version');
   const minor = pythonMinorOf(version);
