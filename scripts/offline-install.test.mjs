@@ -11,6 +11,7 @@ import { BRIDGE_RUNTIME_FILES } from './bridge-runtime.mjs';
 const source = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const base = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'devkit offline '));
 const bundle = path.join(base, 'bundle');
+const hostPython = spawnSync('python3', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' }).stdout.trim();
 const env = { ...process.env, NUWAX_DEVKIT_RESOLVE_ROOT: path.join(base, 'must-not-resolve-source') };
 delete env.DSH_HOME;
 function run(script, args, ok = true, extraEnv = {}) {
@@ -32,7 +33,7 @@ function fixture(name) {
 function nuwax(hostRoot, format = 'nested') {
   const agents = Buffer.from('# Existing workspace\r\nOnly existing platform skill: nuwax-stack.\r\n');
   const config = { agentId: 33300105, loop: 19346, runtime: { workerConversationId: 1741445, sandboxId: 4256 }, notification: { senderId: 1790767767, senderType: 2 }, credentials: { reference: 'keep-existing-reference' }, runtimeGuard: { devkitCli: '/old/cli', devkitCrewRoot: '/old/crew', leaseSeconds: 120 }, tasks: { db: 'state/tasks/tasks.sqlite', cursor: 73 } };
-  if (format === 'nested') config.runtimeGuard.tools = { devkitCli: { path: '/old/nested/cli', required: true, minVersion: '0.1.0' }, python: { path: '/usr/bin/python3' } };
+  if (format === 'nested') config.runtimeGuard.tools = { devkitCli: { path: '/old/nested/cli', required: true, minVersion: '0.1.0' }, python: { path: hostPython } };
   fs.writeFileSync(path.join(hostRoot, 'AGENTS.md'), agents, { mode: 0o640 });
   fs.writeFileSync(path.join(hostRoot, 'work-computer.json'), JSON.stringify(config) + '\n', { mode: 0o600 });
   fs.mkdirSync(path.join(hostRoot, 'state', 'tasks'), { recursive: true });
@@ -71,6 +72,12 @@ try {
   fs.cpSync(bundle, upgraded, { recursive: true });
   fs.appendFileSync(path.join(upgraded, 'docs', 'INSTALLATION.md'), '\nFixture release 2.\n');
   const manifest = read(path.join(upgraded, 'manifest.json')); manifest.files = fileMap(upgraded); delete manifest.files['manifest.json']; write(path.join(upgraded, 'manifest.json'), manifest);
+
+  const failedBundle = path.join(base, 'bundle-doctor-failure');
+  fs.cpSync(bundle, failedBundle, { recursive: true });
+  fs.writeFileSync(path.join(failedBundle, 'payload/packages/@nuwax-ai/devkit-cli/lib/doctor.mjs'), "throw Error('fixture doctor failure');\n");
+  const failedManifest = read(path.join(failedBundle, 'manifest.json'));
+  failedManifest.files = fileMap(failedBundle); delete failedManifest.files['manifest.json']; write(path.join(failedBundle, 'manifest.json'), failedManifest);
 
   for (let host of ['codex', 'deepseek-harness', 'nuwax', 'nuwax-legacy']) await test(`${host}: installed CLI, idempotence, upgrade, rollback and byte-exact uninstall`, () => {
     const format = host === 'nuwax-legacy' ? 'legacy' : 'nested';
@@ -131,6 +138,26 @@ try {
     fs.renameSync(one.release, moved);
     assert.deepEqual(read(path.join(moved, 'skill/installation.json')), { schemaVersion: 2, command: 'nuwax-forge' });
     checkedDoctor({ release: moved }, path.join(moved, 'skill'));
+  });
+
+  await test('nuwax launcher retains the configured interpreter under the platform minimal PATH', () => {
+    const f = fixture('nuwax-python'); nuwax(f.hostRoot);
+    const marker = path.join(base, 'python-invocations.jsonl');
+    const python = path.join(base, "configured python's launcher.mjs");
+    fs.writeFileSync(python, `#!${process.execPath}\nimport fs from 'node:fs';import {spawnSync} from 'node:child_process';\nfs.appendFileSync(${JSON.stringify(marker)},JSON.stringify(process.argv.slice(2))+'\\n');\nconst r=spawnSync(${JSON.stringify(hostPython)},process.argv.slice(2),{stdio:'inherit'});process.exit(r.status??1);\n`, { mode: 0o755 });
+    const config = read(path.join(f.hostRoot, 'work-computer.json'));
+    config.runtimeGuard.tools.python.path = python; write(path.join(f.hostRoot, 'work-computer.json'), config);
+    install('nuwax', f.root, f.hostRoot);
+    const launcher = path.join(path.dirname(f.root), 'bin/nuwax-forge');
+    const invoke = args => spawnSync(launcher, args, { env: { ...env, PATH: '/usr/bin:/bin' }, encoding: 'utf8', timeout: 15000 });
+    const doctor = invoke(['doctor', '--json']); assert.equal(doctor.status, 0, doctor.stderr + doctor.stdout);
+    assert.equal(JSON.parse(doctor.stdout).checks.find(c => c.check === 'python').bin, python);
+    const crew = invoke(['crew', 'route', '--help']); assert.equal(crew.status, 0, crew.stderr); assert.match(crew.stdout, /crew route/);
+    const stack = invoke(['stack', 'runtime', '--command', 'check']); assert.notEqual(stack.status, 0); assert.match(stack.stderr, /profile/);
+    const calls = fs.readFileSync(marker, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    assert.ok(calls.some(args => args.includes('crew.cli')));
+    assert.ok(calls.some(args => args.some(arg => arg.endsWith('runtime_guard.py'))));
+    action('uninstall', f.root);
   });
 
   await test('registered copies follow a relocated managed root using the same relative descriptor', () => {
@@ -203,7 +230,7 @@ try {
     assert.deepEqual(snapshot(f.hostRoot,'dir'),before);assert.deepEqual(fs.readFileSync(path.join(f.root,'managed.json')),oldState);
     // Inject doctor failure after legacy uninstall: the bridge restores original bytes.
     const failed=['--legacy-bundle',legacy,'--legacy-root',f.root,'--root',path.join(base,'fail-'+host),'--host',host,host==='nuwax'?'--workspace':'--host-root',f.hostRoot,'--backup',path.join(base,'fail-backup-'+host),'--bin-dir',bin];
-    run(path.join(bundle,'migrate.mjs'),failed,false,{NUWAX_DEVKIT_PYTHON:path.join(base,'missing-python')});
+    run(path.join(failedBundle,'migrate.mjs'),failed,false);
     assert.deepEqual(snapshot(f.hostRoot,'dir'),before);assert.deepEqual(fs.readFileSync(path.join(f.root,'managed.json')),oldState);
   });
 

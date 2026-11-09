@@ -15,7 +15,7 @@ export function parseCrewArgs(argv) {
 export function runCrew({ argv }) {
   const crew = resolvePackage('@nuwax-ai/devkit-crew');
   if (!crew) throw new Error('未找到同安装 @nuwax-ai/devkit-crew');
-  const result = spawnSync('python3', ['-B', '-m', 'crew.cli', ...argv], {
+  const result = spawnSync(process.env.NUWAX_DEVKIT_PYTHON || 'python3', ['-B', '-m', 'crew.cli', ...argv], {
     stdio: 'inherit', shell: false,
     env: { ...process.env, PYTHONPATH: [crew.root, process.env.PYTHONPATH].filter(Boolean).join(delimiter) },
   });

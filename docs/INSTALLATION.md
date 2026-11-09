@@ -37,4 +37,6 @@ rollback 还原上一版本注册；uninstall 恢复最初 AGENTS/config、移�
 
 默认在 `~/.local/bin/nuwax-forge` 安装受管 launcher；可用 `--bin-dir <绝对目录>` 指定，不改 PATH，不覆盖非受管同名文件。三宿主共存时各受管根需使用独立 bin 目录，用户入口选择 Codex 的 `~/.local/bin`。
 
+Nuwax launcher 使用工作台 `runtimeGuard.tools.python.path` 中已登记的绝对 Python 路径，自检也使用同一解释器。该绑定只作用于 Forge 进程，不修改系统 PATH；doctor、Stack、Crew、看板和验证流程统一继承 `NUWAX_DEVKIT_PYTHON`，命令显式提供的 `--python` 优先。未登记时继续使用宿主默认 Python，安装前须通过版本检查。
+
 旧安装迁移：`node <bundle>/migrate.mjs --legacy-bundle <旧bundle> --legacy-root <旧root> --root <新root> --host <宿主> --host-root <宿主root> --backup <私有新目录> --bin-dir <绝对bin>`；Nuwax 使用 `--workspace`。先备份旧注册、managed 与 profile，再旧版卸载恢复并安装新版，失败自动恢复。`--disable-skill <旧独立Skill>` 只移动到私有备份，保留 symlink；恢复使用 `node <bundle>/migrate.mjs --restore <backup>`。旧版本保留，不改 TaskStore 或 shell 设置。
