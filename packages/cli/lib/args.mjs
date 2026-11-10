@@ -5,7 +5,7 @@ export const USAGE = `用法：
   nuwax-forge crew <route|patrol|trigger|usage|ledger|health|verify> [参数；子命令 --help 查看]
   nuwax-forge stack module --name <runtime-guard|triage|autonomous-run|...>
   nuwax-forge stack runtime --command <check|lease|context|backoff|dispatch|record> --profile <profile.json> [--input <JSON>]
-  nuwax-forge stack workflow --command <sync|next|submit|run|finish> --profile <profile.json> [--input <JSON>]
+  nuwax-forge stack workflow --command <sync|next|submit|run|finish|review> --profile <profile.json> [--input <JSON>]
   nuwax-forge stack task-state --command <trigger-record|trigger-read|ticket-admit|ticket-read|assignment-prepare|assignment-start|assignment-report|assignment-finish> --input <JSON 文件>
   nuwax-forge help
   nuwax-forge dsh-plugin <add|remove|inspect|run> --profile <DSH profile> [--package <npm包或路径>] [--binary <dsh>]
