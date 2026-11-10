@@ -46,6 +46,8 @@ footer{color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding-
 .live-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:-8px 0 20px;color:var(--dim);font-size:12px}
 .live-controls button{background:var(--panel);border:1px solid var(--blue);color:var(--ink);padding:6px 12px;cursor:pointer}
 .live-controls button:disabled{opacity:.5;cursor:wait}
+#refresh-status{min-inline-size:17em}
+#source-time,.meta{font-variant-numeric:tabular-nums}
 .route-arrow{color:var(--amber);padding:0 8px}
 .view-nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:22px;border-bottom:1px solid var(--line);padding-bottom:10px}
 .view-nav button,.pager button{background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:7px 12px;cursor:pointer}
