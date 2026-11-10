@@ -52,7 +52,7 @@ export async function prepare(opts) {
   const brief = readFileSync(briefFile, 'utf8');
   if (!brief.trim() || brief.includes('\0')) throw new UsageError('brief 必须是非空文本');
   const probe = doctor(spec.runtime); spec.runtime = { ...spec.runtime, binary: probe.binary };
-  const prompt = `独立新任务。不要读取其它会话、凭据或全量历史，不另派代理，不重试。仅在工作目录执行本任务，权限为 ${spec.permissions.mode}。完成与产品验收分别报告。\n\n${brief}`;
+  const prompt = `独立新任务。不要读取其它会话、凭据或全量历史，不另派代理，不重启或恢复模型会话。禁止自动再派一次任务；当前会话内，在既定范围、权限、时间与预算内修正命令、修复实现、重复运行必要测试是正常实施，不能因一次可修正的命令失败就放弃。\n唯一仓库根目录为 ${spec.worktree}，权限为 ${spec.permissions.mode}。先确认实际 cwd；对子目录使用明确 cwd 或绝对路径，不假设每次命令沿用上一次 cd。缺依赖先检查明确提供的验证环境，确实不可用再报告具体阻塞。完成与产品验收分别报告。\n\n${brief}`;
   const cmd = command(spec, state);
   const decision = prepareExecution({ spec: spec.budgetSpec, remainingTokens: spec.budget.maxTokens, brief: prompt,
     context: spec.context, worktree: spec.worktree, command: cmd, requiredModel: spec.runtime.model });

@@ -43,6 +43,11 @@ function liveGroup(group) {
 
 test('inherited entry rejects an unowned process group before claiming or dispatching', {skip:process.platform==='win32'}, t=>{
   const f=fixture(t);
+  const prompt=fs.readFileSync(path.join(f.state,'brief.txt'),'utf8');
+  assert.ok(prompt.includes(path.join(f.root,'workspace')));
+  assert.match(prompt,/当前会话内.*修正命令.*重复运行必要测试/);
+  assert.match(prompt,/不重启或恢复模型会话/);
+  assert.ok(!prompt.includes('不另派代理，不重试。'));
   const result=spawnSync(process.execPath,[entry,f.state],{encoding:'utf8',timeout:5000});
   assert.equal(result.status,2); assert.match(result.stderr,/leader/);
   assert.equal(fs.existsSync(path.join(f.state,'run.claim')),false);

@@ -80,6 +80,84 @@ def task_store(profile, task):
     return TaskStore(Path(profile['runtimeGuard']['taskStore']).parent, repo)
 
 
+def execution_preflight(request):
+    """Passive path/capability checks only; never execute project commands."""
+    worktree = Path(request['worktree']).resolve(strict=True)
+    plan = guard.load(request['plan'])
+    check = request.get('preflight')
+    if plan.get('mode') == 'model' and request.get('deliveryKind', 'pull-request') == 'pull-request' and check is None:
+        raise ValueError('code-task-requires-workdir-files-and-test-runner-preflight')
+    if check is None:
+        return
+    if not isinstance(check, dict) or set(check) != {'cwd','requiredFiles','executables'}:
+        raise ValueError('invalid-execution-preflight')
+    cwd = Path(check['cwd']).resolve(strict=True)
+    if not cwd.is_dir() or not cwd.is_relative_to(worktree):
+        raise ValueError('preflight-cwd-outside-worktree')
+    for field in ('requiredFiles','executables'):
+        if not isinstance(check[field], list) or not 0 < len(check[field]) <= 32:
+            raise ValueError('preflight-'+field+'-required')
+    for value in check['requiredFiles']:
+        path = (worktree/value).resolve(strict=True)
+        if not path.is_relative_to(worktree) or not path.is_file():
+            raise ValueError('preflight-source-file-missing-or-outside-worktree')
+    for value in check['executables']:
+        path = Path(value)
+        if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+            raise ValueError('preflight-test-runner-unavailable')
+
+
+def failure_details(profile, entry, receipt):
+    details = {'reason':'execution-or-budget-failed', 'receipt':entry.get('receiptFile')}
+    root = receipt.get('crewArtifacts')
+    if not root:
+        return details
+    root = Path(root).resolve()
+    if not root.is_relative_to(Path(profile['workspace']['artifactsDirectory']).resolve()):
+        return details
+    execution = root/'execution.json'
+    if not execution.is_file():
+        return details
+    result = guard.load(execution, 4*1048576)
+    for i, step in enumerate(result.get('results', [])):
+        if step.get('processPassed') is True:
+            continue
+        details['reason'] = step.get('reason') or step.get('failure') or details['reason']
+        details['executor'] = step.get('executor')
+        worker = root/f'step-{i+1}'/'worker'/'manifest.json'
+        if worker.is_file():
+            manifest = guard.load(worker)
+            details['reason'] = manifest.get('stopReason') or manifest.get('reason') or details['reason']
+            details['observedBudget'] = manifest.get('observedBudget')
+        break
+    return details
+
+
+def review_failure(profile, data):
+    """Record a concrete recovery next step, without deciding or retrying."""
+    key = identity(data)
+    for field in ('summary','nextAction'):
+        if not isinstance(data.get(field), str) or not 0 < len(data[field]) <= 1000:
+            raise ValueError('failure-review-'+field+'-required')
+    with guard.locked(journal_path(profile).parent):
+        entries = journal(profile); entry = entries[key]
+        if entry['status'] != 'failed':
+            raise ValueError('only-failed-attempt-can-be-reviewed')
+        if entry.get('failureReview'):
+            return {'status':'blocked','duplicate':True,'automaticRetry':False}
+        task = rows(profile)[entry['taskKey']]
+        if task.get('phase') != 'blocked':
+            raise ValueError('task-state-changed-reconcile-before-review')
+        receipt = guard.load(entry['receiptFile']) if entry.get('receiptFile') else {}
+        details = failure_details(profile, entry, receipt)
+        checkpoint(profile, entry['taskKey'], {'blocker':details['reason'],
+            'last_action':data['summary'],'next_action':data['nextAction']})
+        entry['failureReview'] = {**details,'summary':data['summary'],'nextAction':data['nextAction'],
+                                 'reviewedAt':guard.now_utc()}
+        save(profile, entries)
+    return {'status':'blocked','automaticRetry':False,'failure':entry['failureReview']}
+
+
 def checkpoint(profile, task_key, patch, seconds=120):
     task = rows(profile)[task_key]
     store = task_store(profile, task)
@@ -103,6 +181,10 @@ def next_action(profile):
     actions = []
     for task_key, task in tasks.items():
         entry = by_task.get(task_key)
+        if entry and task.get('phase') == 'blocked' and entry['status'] == 'failed' and not entry.get('failureReview') and entry.get('receiptFile'):
+            actions.append((4, {'action':'review-failure','taskKey':task_key,'attemptId':entry['attemptId'],
+                'receipt':entry['receiptFile'],'automaticRetry':False,
+                'nextAction':'核对失败回执与执行条件，记录具体恢复步骤；不得自动重跑'}))
         if entry and entry['status'] not in {'done', 'failed'}:
             item = decisions.get(entry['approvalId'], {})
             status = item.get('status', 'unknown')
@@ -120,7 +202,7 @@ def next_action(profile):
             else:
                 counts['decisionOrBlocked'] += 1
             continue
-        if task.get('phase') in READY and not entry:
+        if task.get('phase') in READY and (not entry or entry['status'] in {'done','failed','superseded'}):
             counts['queued'] += 1
             actions.append((3, {'action': 'prepare-approval', 'taskKey': task_key,
                                 'objective': str(task.get('objective') or task.get('title') or '')[:1200],
@@ -129,7 +211,11 @@ def next_action(profile):
         elif task.get('phase') not in {'done'}:
             counts['decisionOrBlocked'] += 1
     actions.sort(key=lambda row: (row[0], row[1].get('createdAt') or '', row[1]['taskKey']))
-    selected = actions[0][1] if actions else {'action': 'wait-approval' if counts['approvalPending'] else 'no-ready-task'}
+    selected = actions[0][1] if actions else {'action': 'wait-approval' if counts['approvalPending'] else 'wait-blocked' if counts['decisionOrBlocked'] else 'no-ready-task'}
+    if selected['action'] == 'wait-blocked':
+        selected['blockers'] = [{'taskKey':key,'phase':task.get('phase'),'reason':task.get('blocker'),
+                                'nextAction':task.get('next_action')} for key, task in tasks.items()
+                               if task.get('phase') not in READY | {'done'}][:10]
     return {'schemaVersion': 1, 'status': 'ready', 'next': selected, 'counts': counts,
             'inspectionIsBusinessProgress': False}
 
@@ -174,6 +260,8 @@ def submit(profile, request):
     if type(timeout) is not int or not 1 <= timeout <= 3300:
         raise ValueError('workflow-timeout-must-fit-task-lease')
     task = rows(profile)[request['taskKey']]
+    execution_preflight(request)
+    baseline_head = subprocess.check_output(['git','-C',request['worktree'],'rev-parse','HEAD'],text=True).strip()
     if not isinstance(task.get('predicates'),list) or not task['predicates']:
         raise ValueError('task-requires-explicit-acceptance-predicates')
     store = task_store(profile, task)
@@ -206,6 +294,7 @@ def submit(profile, request):
                             'requestFile':str(path), 'requestHash':guard.sha_file(path),
                             'approvalId':result['approvalId'], 'createdAt':guard.now_utc(),
                             'definitionHash':definition_hash(task),'observedDecision':'pending'}
+            entries[key]['baselineHead'] = baseline_head
             save(profile, entries)
         # Reconcile a crash between journal persistence and TaskStore checkpoint without
         # creating another approval or changing the approved plan.
@@ -237,6 +326,7 @@ def run(profile, data):
             raise ValueError('task-state-changed-reconcile-before-execution')
         if definition_hash(task)!=entry['definitionHash']:
             raise ValueError('task-definition-changed-reapproval-required')
+        execution_preflight(request)
         decision=approval_rows(profile).get(entry['approvalId'],{}).get('status','unknown')
         if decision!='approved':
             return {'status':'approval-'+decision,'approvalId':entry['approvalId'],'executeAllowed':False}
@@ -283,6 +373,8 @@ def run(profile, data):
             delivery = {}
             from crew.delivery import delivery_fields
             for item in result.get('results',[]):delivery.update(delivery_fields(item.get('delivery',{})))
+            if delivery.get('commit') == entry.get('baselineHead') and not delivery.get('prUrl'):
+                delivery = {}  # An unchanged checkout is not a code delivery.
             receipt = {'taskKey':entry['taskKey'],'attemptId':entry['attemptId'],'exitCode':return_code,
                        'processPassed':process_passed,'acceptancePassed':None,'budgetPassed':result.get('budgetPassed'),
                        'budget':result.get('budget'),'delivery':delivery,'crewArtifacts':result.get('artifacts'),
@@ -325,13 +417,13 @@ def finish(profile,data):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['next','sync','submit','run','finish'])
+    parser.add_argument('command',choices=['next','sync','submit','run','finish','review'])
     parser.add_argument('--profile',required=True);parser.add_argument('--input')
     args=parser.parse_args()
     try:
         profile=guard.load(args.profile)
         data=guard.load(args.input,16384) if args.input else {}
-        result=next_action(profile) if args.command=='next' else sync(profile) if args.command=='sync' else {'submit':submit,'run':run,'finish':finish}[args.command](profile,data)
+        result=next_action(profile) if args.command=='next' else sync(profile) if args.command=='sync' else {'submit':submit,'run':run,'finish':finish,'review':review_failure}[args.command](profile,data)
         blob=guard.encoded(result)
         if len(blob)>16384:raise ValueError('workflow-output-limit')
         sys.stdout.buffer.write(blob)

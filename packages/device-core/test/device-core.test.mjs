@@ -31,7 +31,10 @@ test('生命周期：同参连接复用句柄；探活/close 结构化', () => {
   assert.equal(h1.reused, false);
   assert.equal(h2.reused, true);
   assert.equal(opened, 1);
-  assert.deepEqual(health(h1, deps), { alive: true, latencyMs: h1 && health(h1, deps).latencyMs, error: null });
+  const probe = health(h1, deps);
+  assert.equal(probe.alive, true);
+  assert.equal(probe.error, null);
+  assert.ok(Number.isInteger(probe.latencyMs) && probe.latencyMs >= 0);
   assert.deepEqual(disconnect(h2, deps), { closed: true, error: null });
   assert.equal(closed, 1);
   assert.deepEqual(disconnect(h2, deps), { closed: true, error: null }); // 幂等

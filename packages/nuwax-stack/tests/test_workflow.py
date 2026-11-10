@@ -176,4 +176,42 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(approvals.list_requests(self.runtime/'approvals.sqlite')),1)
 
 
+    def test_failure_is_actionable_once_and_never_automatically_restarted(self):
+        self.plan['assignments'][0]['command']=[sys.executable,'-c','raise SystemExit(2)']
+        (self.work/'plan.json').write_text(json.dumps(self.plan));pending=self.submit();self.approve_fixture(pending)
+        self.command('run',self.request,expected=3)
+        action=self.command('next')['next'];self.assertEqual(action['action'],'review-failure')
+        self.assertFalse(action['automaticRetry'])
+        ledger=(self.workspace/'state/crew-usage.jsonl').read_bytes()
+        review={**self.request,'summary':'实际命令退出2，未交付','nextAction':'先修复执行条件，准备新审批；不自动重跑'}
+        self.command('review',review,expected=3)
+        self.assertEqual(self.task()['phase'],'blocked')
+        self.assertEqual(self.task()['blocker'],'process-failed')
+        revision=self.task()['revision'];self.command('review',review,expected=3)
+        self.assertEqual(self.task()['revision'],revision)
+        self.assertEqual(self.command('next')['next']['action'],'wait-blocked')
+        self.assertEqual((self.workspace/'state/crew-usage.jsonl').read_bytes(),ledger)
+
+    def test_model_code_requires_real_workdir_source_and_runner_before_approval(self):
+        self.plan.update(mode='model',budget={'maxTokens':20000,'maxAttempts':1},budgetSpec={'mode':'model'})
+        (self.work/'plan.json').write_text(json.dumps(self.plan));self.request['deliveryKind']='pull-request'
+        self.assertIn('preflight',self.command('submit',self.request,expected=3)['reason'])
+        self.assertEqual(approvals.list_requests(self.runtime/'approvals.sqlite'),[])
+        source=self.work/'source.txt';source.write_text('actual source')
+        self.request['preflight']={'cwd':str(self.work),'requiredFiles':['source.txt'],'executables':['/missing/vitest']}
+        self.assertIn('runner-unavailable',self.command('submit',self.request,expected=3)['reason'])
+        self.assertEqual(approvals.list_requests(self.runtime/'approvals.sqlite'),[])
+        self.request['preflight']['executables']=[sys.executable]
+        pending=self.submit();self.approve_fixture(pending);source.unlink()
+        self.command('run',self.request,expected=3)
+        self.assertFalse((self.runtime/'dispatch-index.json').exists())
+
+    def test_unchanged_baseline_is_not_a_code_delivery(self):
+        code='import json,pathlib;pathlib.Path("{stepArtifacts}/delivery.json").write_text(json.dumps('+repr({'branch':'fixture','commit':self.head})+'))'
+        self.plan['assignments'][0]['command']=[sys.executable,'-c',code]
+        (self.work/'plan.json').write_text(json.dumps(self.plan));pending=self.submit();self.approve_fixture(pending)
+        result=self.command('run',self.request)
+        self.assertEqual(result['status'],'verifying');self.assertEqual(result['delivery'],{})
+
+
 if __name__=='__main__':unittest.main()
