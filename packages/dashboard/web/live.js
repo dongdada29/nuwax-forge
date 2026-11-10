@@ -5,12 +5,58 @@
   const interval = Number(controls.dataset.interval);
   const filterIds = {q: 'task-search', state: 'task-state', source: 'task-source', executor: 'task-executor', period: 'task-period'};
   let busy = false;
+  let refreshPromise = Promise.resolve();
   let view = 'tasks';
   let selectedTask = '';
+  let dialogContent = '';
   let filters = {};
   let contentHash = document.querySelector('#dashboard-content').dataset.contentHash;
   const pages = {};
+  const automaticStatus = '自动刷新：每 ' + interval + ' 秒';
   document.body.classList.add('live-dashboard');
+
+  const setText = (element, text) => { if (element.textContent !== text) element.textContent = text; };
+  const setHidden = (element, hidden) => { if (element.hidden !== hidden) element.hidden = hidden; };
+  const owned = node => node.nodeType === Node.ELEMENT_NODE && node.hasAttribute('data-live-owned');
+  function nodeKey(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    for (const name of ['id', 'data-task-row', 'data-task-detail', 'data-approval-card']) {
+      if (node.hasAttribute(name)) return name + ':' + node.getAttribute(name);
+    }
+    return '';
+  }
+  // Keep existing controls, task rows and details mounted. Polling must not
+  // reset focus, text selection, expanded plans or the reader's scroll position.
+  function patchChildren(current, next) {
+    const keyed = new Map([...current.childNodes].filter(node => nodeKey(node)).map(node => [nodeKey(node), node]));
+    let cursor = current.firstChild;
+    for (const wanted of next.childNodes) {
+      while (cursor && owned(cursor)) cursor = cursor.nextSibling;
+      const key = nodeKey(wanted);
+      let node = key ? keyed.get(key) : cursor && !nodeKey(cursor) ? cursor : null;
+      if (!node || node.nodeType !== wanted.nodeType || node.nodeName !== wanted.nodeName) {
+        node = wanted.cloneNode(true); current.insertBefore(node, cursor);
+      } else {
+        if (node !== cursor) current.insertBefore(node, cursor);
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const local = name => name === 'open' || name === 'hidden' || (name === 'disabled' && node.hasAttribute('data-approval'));
+          for (const attribute of [...node.attributes]) {
+            if (!local(attribute.name) && !wanted.hasAttribute(attribute.name)) node.removeAttribute(attribute.name);
+          }
+          for (const attribute of wanted.attributes) {
+            if (!local(attribute.name) && node.getAttribute(attribute.name) !== attribute.value) node.setAttribute(attribute.name, attribute.value);
+          }
+          patchChildren(node, wanted);
+        } else if (node.nodeValue !== wanted.nodeValue) node.nodeValue = wanted.nodeValue;
+      }
+      cursor = node.nextSibling;
+    }
+    while (cursor) {
+      const nextNode = cursor.nextSibling;
+      if (!owned(cursor)) cursor.remove();
+      cursor = nextNode;
+    }
+  }
 
   const dialog = document.createElement('dialog');
   dialog.className = 'task-dialog';
@@ -68,28 +114,32 @@
   function renderView() {
     restoreControls();
     document.querySelectorAll('.view-nav button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.target === view)));
-    document.querySelectorAll('#dashboard-content section[data-view]').forEach(section => { section.hidden = section.dataset.view !== view; });
+    document.querySelectorAll('#dashboard-content section[data-view]').forEach(section => setHidden(section, section.dataset.view !== view));
     document.querySelectorAll('#dashboard-content table[data-paginate]').forEach(table => {
       const key = table.dataset.paginate;
       const rows = [...table.querySelectorAll('tr')].filter(row => row.querySelector('td'));
       const matches = key === 'workbench' ? rows.filter(taskMatches) : rows;
       const total = Math.max(1, Math.ceil(matches.length / 10));
       pages[key] = Math.min(Math.max(pages[key] || 1, 1), total);
-      rows.forEach(row => { row.hidden = true; });
-      matches.slice((pages[key] - 1) * 10, pages[key] * 10).forEach(row => { row.hidden = false; });
-      table.parentElement.querySelectorAll('.pager').forEach(element => element.remove());
+      const visible = new Set(matches.slice((pages[key] - 1) * 10, pages[key] * 10));
+      rows.forEach(row => setHidden(row, !visible.has(row)));
+      let pager = [...table.parentElement.querySelectorAll('.pager')].find(element => element.dataset.table === key);
       if (key === 'workbench') {
-        document.querySelector('#task-results').textContent = '显示 ' + matches.length + ' / ' + rows.length + ' 个任务';
-        document.querySelector('#task-no-match').hidden = matches.length > 0 || rows.length === 0;
+        setText(document.querySelector('#task-results'), '显示 ' + matches.length + ' / ' + rows.length + ' 个任务');
+        setHidden(document.querySelector('#task-no-match'), matches.length > 0 || rows.length === 0);
       }
-      if (matches.length <= 10) return;
-      const pager = document.createElement('div'); pager.className = 'pager';
-      const previous = document.createElement('button'); previous.type = 'button'; previous.textContent = '上一页'; previous.disabled = pages[key] === 1;
-      const next = document.createElement('button'); next.type = 'button'; next.textContent = '下一页'; next.disabled = pages[key] === total;
-      previous.addEventListener('click', () => { pages[key]--; renderView(); saveLocation(); });
-      next.addEventListener('click', () => { pages[key]++; renderView(); saveLocation(); });
-      const label = document.createElement('span'); label.textContent = '第 ' + pages[key] + ' / ' + total + ' 页 · ' + matches.length + ' 条';
-      pager.append(previous, label, next); table.insertAdjacentElement('afterend', pager);
+      if (matches.length <= 10) { pager?.remove(); return; }
+      if (!pager) {
+        pager = document.createElement('div'); pager.className = 'pager'; pager.dataset.table = key; pager.setAttribute('data-live-owned', '');
+        const previous = document.createElement('button'); previous.type = 'button'; previous.textContent = '上一页';
+        const next = document.createElement('button'); next.type = 'button'; next.textContent = '下一页';
+        previous.addEventListener('click', () => { pages[key]--; renderView(); saveLocation(); });
+        next.addEventListener('click', () => { pages[key]++; renderView(); saveLocation(); });
+        pager.append(previous, document.createElement('span'), next); table.insertAdjacentElement('afterend', pager);
+      }
+      pager.firstElementChild.disabled = pages[key] === 1;
+      pager.lastElementChild.disabled = pages[key] === total;
+      setText(pager.querySelector('span'), '第 ' + pages[key] + ' / ' + total + ' 页 · ' + matches.length + ' 条');
     });
   }
 
@@ -98,9 +148,15 @@
     if (!selectedTask) { if (dialog.open) dialog.close(); return; }
     const scroll = dialog.scrollTop;
     if (source) {
-      detail.replaceChildren(source.querySelector('.task-detail-body').cloneNode(true));
-      detail.querySelector('h3').id = 'task-dialog-title';
+      const body = source.querySelector('.task-detail-body');
+      const signature = selectedTask + ':' + body.innerHTML;
+      if (signature !== dialogContent) {
+        patchChildren(detail, {childNodes: [body]});
+        detail.querySelector('h3').id = 'task-dialog-title';
+        dialogContent = signature;
+      }
     } else {
+      dialogContent = '';
       const heading = document.createElement('h3'); heading.id = 'task-dialog-title'; heading.textContent = '任务已不在当前数据范围';
       detail.replaceChildren(heading);
     }
@@ -125,9 +181,15 @@
   document.addEventListener('input', event => { if (event.target.id === 'task-search') filterChanged(event); });
   document.addEventListener('change', filterChanged);
 
-  async function refresh() {
-    if (busy) return;
-    busy = true; button.disabled = true; status.textContent = '正在刷新…';
+  function refresh({manual = false} = {}) {
+    if (busy) return manual ? refreshPromise.then(() => refresh({manual: true})) : refreshPromise;
+    busy = true;
+    if (manual) { button.disabled = true; setText(status, '正在刷新…'); }
+    refreshPromise = update(manual).finally(() => { busy = false; if (manual) button.disabled = false; });
+    return refreshPromise;
+  }
+
+  async function update(manual) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
@@ -142,23 +204,27 @@
         const active = document.activeElement;
         const focus = active?.id;
         const selection = active?.id === 'task-search' ? [active.selectionStart, active.selectionEnd] : null;
-        const expandedSources = document.querySelector('.source-health details')?.open;
-        document.querySelector('#dashboard-content').innerHTML = content.innerHTML;
+        const scroll = {left: window.scrollX, top: window.scrollY};
+        const anchor = document.elementFromPoint(window.innerWidth / 2, Math.min(120, window.innerHeight / 2))?.closest('[data-task-row], [data-approval-card], .summary-card, section');
+        const anchorTop = anchor?.getBoundingClientRect().top;
+        patchChildren(document.querySelector('#dashboard-content'), content);
         contentHash = content.dataset.contentHash;
         renderView(); renderDialog(); saveLocation();
-        const sourceDetails = document.querySelector('.source-health details');
-        if (sourceDetails) sourceDetails.open = Boolean(expandedSources);
         const field = focus && document.getElementById(focus);
-        if (field) { field.focus({preventScroll: true}); if (selection) field.setSelectionRange(...selection); }
+        if (!active?.isConnected && field) { field.focus({preventScroll: true}); if (selection) field.setSelectionRange(...selection); }
+        if (anchor?.isConnected && anchor.getClientRects().length) scroll.top = window.scrollY + anchor.getBoundingClientRect().top - anchorTop;
+        window.scrollTo({...scroll, behavior: 'instant'});
+        patchChildren(document.querySelector('.meta'), meta);
       }
-      document.querySelector('.meta').innerHTML = meta.innerHTML;
-      document.querySelector('#source-time').textContent = source.textContent;
-      status.textContent = '页面读取成功 ' + new Date().toLocaleTimeString() + ' · 来源时间见下方';
+      if (manual) patchChildren(document.querySelector('.meta'), meta);
+      setText(document.querySelector('#source-time'), source.textContent);
+      setText(status, automaticStatus);
+      status.title = '最近成功读取：' + new Date().toLocaleTimeString() + '；数据来源时间见下方';
     } catch (_) {
-      status.textContent = '刷新失败，保留上次数据；将自动重试';
-    } finally { clearTimeout(timeout); busy = false; button.disabled = false; }
+      setText(status, '刷新失败，保留上次数据；将自动重试');
+    } finally { clearTimeout(timeout); }
   }
-  button.addEventListener('click', refresh);
+  button.addEventListener('click', () => refresh({manual: true}));
   document.addEventListener('click', async event => {
     const target = event.target.closest('button, a[data-task-open]');
     if (!target) return;

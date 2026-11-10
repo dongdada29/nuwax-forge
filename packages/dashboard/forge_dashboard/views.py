@@ -265,7 +265,7 @@ def build_html(usage: dict, registry: dict, health: dict, matrix: list, flow_row
         state = item.get('status', 'unknown')
         actions = (f'<div class="approval-actions"><button type="button" data-approval="{esc(item.get("id"))}" data-decision="approved">通过</button>'
                    f'<button type="button" data-approval="{esc(item.get("id"))}" data-decision="rejected">拒绝</button></div>') if state == 'pending' and approvals_actionable else ''
-        cards.append(f'<article class="approval-card"><h3>{esc(item.get("summary"))} '
+        cards.append(f'<article class="approval-card" data-approval-card="{esc(item.get("id"))}"><h3>{esc(item.get("summary"))} '
                      f'<span class="approval-{esc(state)}">{esc(approved_status.get(state, "未知"))}</span></h3>'
                      f'<p>任务：{esc(item.get("taskKey"))} · 尝试：{esc(item.get("attemptId"))}</p>'
                      f'<p>范围：{esc(item.get("scope"))}</p><p>验收：{esc(item.get("acceptance"))}</p>'
